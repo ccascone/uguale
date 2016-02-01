@@ -108,7 +108,8 @@ def iptables_meter_marker(rates, dest_port_tcp, interval, dsmark_qdisc_id):
 
 
 
-def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen, g_rates, m_m_rates, marking, tech, num_colors):
+def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen, g_rates, m_m_rates, 
+	marking, tech, num_colors, symmetric, e_f_rates):
 	clean_interface_tc(intf)		
 	flush_iptables()
 
@@ -128,8 +129,8 @@ def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen, g_rates, m_m
 	"""
 	dsmark_qdisc_id = 1
 	if marking != NO_MARKERS:
-		add_dsmark_qdisc(intf, "root", dsmark_qdisc_id, 16, num_colors)
-		for dscp in range(1,9): # i=1-->8
+		add_dsmark_qdisc(intf, "root", dsmark_qdisc_id, 64, num_colors)
+		for dscp in range(1,num_colors+1): # i=1-->8
 			change_dsmark_class(intf, dsmark_qdisc_id, dscp, dscp)
 
 	# Set iptables and netem
@@ -157,7 +158,7 @@ def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen, g_rates, m_m
 			"""
 			Calculate user parameters
 			"""		
-			rates = get_rates(g_rates[i], bn_cap, m_m_rates[i],num_colors)
+			rates = get_rates(g_rates[i], bn_cap, m_m_rates[i],num_colors, symmetric, e_f_rates[i])
 			print_rates(rates, bn_cap)
 			if marking == IPTABLES_MARKERS:
 				# put all measuring and classifying rules for the user

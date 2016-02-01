@@ -11,12 +11,17 @@ Apply settings and start connectios
 
 def run_program(pc_ip, intf, g_rates, bn_cap, fixed_conns,
 				fixed_rtts, vr_limit, duration,
-				marking, m_m_rates,queuelen, tech, start_ts, num_colors):
+				marking, m_m_rates,queuelen, tech, start_ts, 
+				num_colors, symmetric, e_f_rates):
+
 	
 	killall("iperf") 
 	#-------------------- Apply meter and markers and netem on veths --------------------------
 	n_users = len(g_rates)
-	marker.veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen, g_rates, m_m_rates, marking, tech, num_colors)
+	print "{}: Configuring veths and markers".format(pc_ip)
+	marker.veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, 
+		queuelen, g_rates, m_m_rates, marking, tech, num_colors, symmetric, e_f_rates)
+	
 	"""
 	Sleep
 	"""	
@@ -101,13 +106,14 @@ def main(argv):
 	-P <tcp-connections>  -f <rtt-list> \n\
 	-l <veth-rate-limit> -d<duration> -m<marking> -M<max-marking-rates>\n\
 	-q<queuelen per user> -t <more-users-technology> -S<starting timestamp>\n\
+	-K <symmetric> -E<expected fair rates>\n\
 	g: list of grates\n\
 	P: list of number of tcp connections \n\
 	f: list of rtts\n\
 	m:  type o markers"
 
 	try:
-		opts, args = getopt.getopt(argv,"hs:i:g:C:P:f:l:d:m:M:q:t:S:Q:")
+		opts, args = getopt.getopt(argv,"hs:i:g:C:P:f:l:d:m:M:q:t:S:Q:K:E:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
@@ -144,13 +150,18 @@ def main(argv):
 			start_ts = float(arg)
 		elif opt in ("-Q"):
 			num_colors = int(arg)
+		elif opt in ("-K"):
+			symmetric = my_bool(arg)
+		elif opt in ("-E"):
+			e_f_rates = map(rate_to_int, arg.split(","))
 
 
 	#print starting_ip, intf, g_rates, bn_cap, policy, fixed_conns, range_rtts, curving, fixed_rtts, vr_limit, duration
 
 	run_program(pc_ip, intf, g_rates, bn_cap, fixed_conns,
 				fixed_rtts, vr_limit, duration,
-				marking, m_m_rates,queuelen, tech,start_ts, num_colors)
+				marking, m_m_rates,queuelen, tech,start_ts, 
+				num_colors, symmetric, e_f_rates)
 
 if __name__ == "__main__":
    main(sys.argv[1:])

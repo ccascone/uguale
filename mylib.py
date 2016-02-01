@@ -169,10 +169,17 @@ def sudo_cmd(command):
 """
 Open a new terminal (xterm) and execute an ssh commands from it
 """
+# def cmd_ssh(pc_ip,command):
+# 	cmd_str = "(xterm -hold -e \"ssh {} '{}'\") & ".format(pc_ip, command)
+# 	cmd(cmd_str)
+# 	print cmd_str
+
 def cmd_ssh(pc_ip,command):
-	cmd_str = "(xterm -hold -e \"ssh {} '{}'\") & ".format(pc_ip, command)
+	cmd_str = "ssh {} '{}' &".format(pc_ip, command)
 	cmd(cmd_str)
 	print cmd_str
+
+
 
 # def cmd_ssh2(pc_ip,command):
 # 	cmd_str = "ssh {} '{}' &".format(pc_ip, command)

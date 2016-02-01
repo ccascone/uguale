@@ -551,7 +551,7 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	filename
 	"""
 	if do_save:
-		quality = "Q{}".format(int(stat[""]*10**6))
+		quality = "Q{}".format(int(stat["global_abs_mean"]*10**6))
 		fig_filename="{}/{}_{}.png".format(new_folders[0],quality,instance_name)
 		plt.savefig(fig_filename, format="PNG")
 

@@ -47,6 +47,7 @@ def clients_thread(params):
 	fixed_rtts = list(params["fixed_rtts"])
 	fixed_conns = list(params["fixed_conns"])
 	m_m_rates = list(params["m_m_rates"])
+	e_f_rates = list(params["e_f_rates"])
 
 	"""
 	Example:
@@ -60,13 +61,15 @@ def clients_thread(params):
 		fixed_conns_host = []	
 		g_rates_host = []	
 		m_m_rates_host = []
+		e_f_rates_host = []
 		for i in range(params["users_p_h"]):
 			fixed_rtts_host.append(fixed_rtts.pop(0))
 			fixed_conns_host.append(fixed_conns.pop(0))	
 			g_rates_host.append(g_rates.pop(0))
 			m_m_rates_host.append(m_m_rates.pop(0))
+			e_f_rates_host.append(e_f_rates.pop(0))
 
-		str_ssh = "python start_users.py -s{} -g{} -C{} -P{} -l{} -f{} -d{} -m{} -M{} -q{} -t{} -S{} -Q{}".format(
+		str_ssh = "python start_users.py -s{} -g{} -C{} -P{} -l{} -f{} -d{} -m{} -M{} -q{} -t{} -S{} -Q{} -K{} -E{}".format(
 			host, 
 			",".join(g_rates_host), # ---> from here we obtain users per host
 			params["bn_cap"], #-C
@@ -79,7 +82,9 @@ def clients_thread(params):
 			params["queuelen"], #-q
 			params["tech"], #-t
 			params["start_ts"],#-S
-			params["bands"]) 
+			params["bands"], #-Q
+			params["symmetric"], #-K
+			",".join(e_f_rates_host)) #-E 
 
 		print str_ssh
 
@@ -91,7 +96,8 @@ def clients_thread(params):
 
 def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts, 
 	list_conns, bn_cap, vr_limit, users_phs, free_bs, repetitions, various_guaranteed, 
-	queuelens, gbs, comp_rtts, visualizations, queuelens_switch, switch_types, markers,colors):
+	queuelens, gbs, comp_rtts, visualizations, queuelens_switch, switch_types, 
+	markers,colors, symmetrics):
 
 	restore_switch()
 	restore_hosts()
@@ -152,162 +158,178 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 										for switch_type in switch_types:
 											for num_colors in colors:
 												for marking in markers:
-													for strength in [0.15]:
+													for symmetric in symmetrics:
+														for strength in [0.15]:
 
-														"""
-														How to mark packets
-														BUCKETS_MARKERS cascade of token bucket filters
-														IPTABLES_MARKERS iptables estimator
-														NO_MARKERS
-														"""
+															"""
+															How to mark packets
+															BUCKETS_MARKERS cascade of token bucket filters
+															IPTABLES_MARKERS iptables estimator
+															NO_MARKERS
+															"""
 
-														"""
-														Certain parameters are useless in standalone mode so we skip combinations.
-														"""
-														if switch_type == STANDALONE:
-															if (marking != NO_MARKERS or free_b != free_bs[0] or 
-																guard_bands != gbs[0] or comp_rtt != comp_rtts[0] or 
-																num_colors != colors[0]):
+															"""
+															Certain parameters are useless in standalone mode so we skip combinations.
+															"""
+															if switch_type == STANDALONE:
+																if (marking != NO_MARKERS or free_b != free_bs[0] or 
+																	guard_bands != gbs[0] or comp_rtt != comp_rtts[0] or 
+																	num_colors != colors[0]):
+																	print "Wrong standalone configuration, skip test"
+																	continue
+															
+															"""
+															If UGUALE is used, markers are mandatory 
+															"""
+															if (switch_type == UGUALE and marking == NO_MARKERS):
+																print "UGUALE without marking, skip test"
 																continue
-														
-														"""
-														If UGUALE is used, markers are mandatory 
-														"""
-														if (switch_type == UGUALE and marking == NO_MARKERS):
-															continue
 
-														"""
-														coherence guard bands and number of colors
-														"""
-														if (switch_type == UGUALE and guard_bands>=num_colors):
-															continue
-
-														n_users = users_ph*len(ADDRESSES)
-														C = rate_to_int(bn_cap)
-														free_C = C*(1.0 - free_b) # capacity to use for guaranteed rates
-
-														#------------------------ GUARANTEED RATES ----------------------
-
-														if not various_guaranteed:
-															g_u = num_to_rate(free_C/float(n_users))
-															g_rates = [g_u]*n_users
-														else:
 															"""
-															Distribute g_u such as each one is double of the other
-															Es. 3 users per host, C = 50Mb
-															base = [1,2,3,1,2,3,1,2,3]
-															sum_base = 15
-															50/15 = 3.33
-															g_rates = base * 3.33 = [3.33, 6.66m 9.99, 13.33, 16.66] whose sum is C 
+															coherence guard bands and number of colors
 															"""
-															base = (range(1,users_ph+1))*len(ADDRESSES)
-															sum_base = np.sum(base)
-															mult = float(free_C)/sum_base
-															g_rates = map(num_to_rate,map(lambda x: x*mult, base))
+															if (switch_type == UGUALE and guard_bands>=num_colors):
+																print "guard_bands > num_colors , skip test"
+																continue
+
+															"""
+															Only even num_colors are admitted with symmetric bands assignment
+															"""
+															if symmetric and num_colors%2!=0:
+																print "Only even num_colors with symmetric assignment, skip test"
+																continue
+
+															n_users = users_ph*len(ADDRESSES)
+															C = rate_to_int(bn_cap)
+															free_C = C*(1.0 - free_b) # capacity to use for guaranteed rates
+
+															#------------------------ GUARANTEED RATES ----------------------
+
+															if not various_guaranteed:
+																g_u = num_to_rate(free_C/float(n_users))
+																g_rates = [g_u]*n_users
+															else:
+																"""
+																Distribute g_u such as each one is double of the other
+																Es. 3 users per host, C = 50Mb
+																base = [1,2,3,1,2,3,1,2,3]
+																sum_base = 15
+																50/15 = 3.33
+																g_rates = base * 3.33 = [3.33, 6.66m 9.99, 13.33, 16.66] whose sum is C 
+																"""
+																base = (range(1,users_ph+1))*len(ADDRESSES)
+																sum_base = np.sum(base)
+																mult = float(free_C)/sum_base
+																g_rates = map(num_to_rate,map(lambda x: x*mult, base))
 
 
-														#------------------------ RTTS ----------------------
-														"""
-														If the range has zero difference, all users have the same rtt
-														If not, RTTs will be equally distributed in the range
-														"""	
-														if keep_same_rtts:
-															range_rtts=[rtts,rtts]	
+															#------------------------ RTTS ----------------------
+															"""
+															If the range has zero difference, all users have the same rtt
+															If not, RTTs will be equally distributed in the range
+															"""	
+															if keep_same_rtts:
+																range_rtts=[rtts,rtts]	
 
-														delta_rtts = range_rtts[1]-range_rtts[0]
-														if delta_rtts == 0:
-															fixed_rtts = [range_rtts[0]]*n_users
-														else:
-															step = delta_rtts/float(n_users-1)
-															fixed_rtts = []
+															delta_rtts = range_rtts[1]-range_rtts[0]
+															if delta_rtts == 0:
+																fixed_rtts = [range_rtts[0]]*n_users
+															else:
+																step = delta_rtts/float(n_users-1)
+																fixed_rtts = []
+																for i in range(n_users):
+																	fixed_rtts.append(range_rtts[0]+(i*step))	
+																random.shuffle(fixed_rtts)
+
+															"""
+															If all users have the same rtts, 
+															comp_rtts can be true or false
+															and now it is true
+															the compensate-rtts has no meaning
+															"""
+															if len(set(fixed_rtts))==1 and len(comp_rtts)>1 and comp_rtt:
+																print "User with the same RTT and RTT compensation active, skip test"
+																continue
+
+															#------------------------CONNECTIONS ----------------------
+															if keep_same_conns:
+																range_conns = [conns,conns]
+															delta_conns = range_conns[1]-range_conns[0]
+															if delta_conns == 0:
+																fixed_conns = [range_conns[0]]*n_users
+															else:
+																"""
+																es. range=[2,8] = (2,3,4,5,6,7,8)
+																#uguali=len(users)/delta(range) 
+																7 users --> (2,3,4,5,6,7,8)
+																9 users --> (2,3,4,5,6,7,8,2,3)
+																if not divisible, return to random
+																"""
+																fixed_conns = []
+																conn_list = range(range_conns[0],range_conns[1]+1)
+																i=0
+																for u in range(n_users):
+																	fixed_conns.append(conn_list[i])
+																	i=(i+1)%len(conn_list)
+																random.shuffle(fixed_conns)										
+
+															#------------- EXPECTED FAIR RATES + COMP RTTS + MAXIMUM MARKING RATES ------------
+															e_f_rates = [] #expected fair rates
+															m_m_rates = [] # maximum marking rates
+															coeffs = [] # coefficients that compensate rtt
+
+															if comp_rtt:
+																coeffs = get_rtt_coefficients(fixed_rtts,C,n_users, strength)
+															else:
+																coeffs = [1]*n_users
+
 															for i in range(n_users):
-																fixed_rtts.append(range_rtts[0]+(i*step))	
-															random.shuffle(fixed_rtts)
+																g_dr = rate_to_int(g_rates[i])
+																efr = g_dr+((free_b*C)/float(n_users))
+																e_f_rates.append(num_to_rate(efr))
+																
+																mmr_normal = get_marker_max_rate(g_rates, free_b, C, n_users, 
+																	guard_bands,num_colors, symmetric) 																
+																mmr = mmr_normal*coeffs[i]
+																m_m_rates.append(num_to_rate(mmr))
 
-														"""
-														If all users have the same rtts, 
-														comp_rtts can be true or false
-														and now it is true
-														the compensate-rtts has no meaning
-														"""
-														if len(set(fixed_rtts))==1 and len(comp_rtts)>1 and comp_rtt:
-															continue
-
-														#------------------------CONNECTIONS ----------------------
-														if keep_same_conns:
-															range_conns = [conns,conns]
-														delta_conns = range_conns[1]-range_conns[0]
-														if delta_conns == 0:
-															fixed_conns = [range_conns[0]]*n_users
-														else:
-															"""
-															es. range=[2,8] = (2,3,4,5,6,7,8)
-															#uguali=len(users)/delta(range) 
-															7 users --> (2,3,4,5,6,7,8)
-															9 users --> (2,3,4,5,6,7,8,2,3)
-															if not divisible, return to random
-															"""
-															fixed_conns = []
-															conn_list = range(range_conns[0],range_conns[1]+1)
-															i=0
-															for u in range(n_users):
-																fixed_conns.append(conn_list[i])
-																i=(i+1)%len(conn_list)
-															random.shuffle(fixed_conns)										
-
-														#------------- EXPECTED FAIR RATES + COMP RTTS + MAXIMUM MARKING RATES ------------
-														e_f_rates = [] #expected fair rates
-														m_m_rates = [] # maximum marking rates
-														coeffs = [] # coefficients that compensate rtt
-
-														if comp_rtt:
-															coeffs = get_rtt_coefficients(fixed_rtts,C,n_users, strength)
-														else:
-															coeffs = [1]*n_users
-
-														for i in range(n_users):
-															g_dr = rate_to_int(g_rates[i])
-															efr = g_dr+((free_b*C)/float(n_users))
-															e_f_rates.append(num_to_rate(efr))
-															mmr_normal = get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands,num_colors) 
-															mmr = mmr_normal*coeffs[i]
-															m_m_rates.append(num_to_rate(mmr))
+															if queuelen_switch == -1:
+																qsw = optimal_queue_len(fixed_rtts, fixed_conns, C)
+															else:
+																qsw = queuelen_switch
 
 
-														if queuelen_switch == -1:
-															qsw = optimal_queue_len(fixed_rtts, fixed_conns, C)
-														else:
-															qsw = queuelen_switch
+															configuration={
+																"cookie"		: cookie, 
+																"bn_cap"		: bn_cap, 	
+																"vr_limit"		: vr_limit, 	
+																"users_p_h"		: users_ph, 	
+																"n_users"		: n_users, 	
+																"g_rates"		: g_rates, 			
+																"range_rtts"	: range_rtts, 	
+																"fixed_rtts"	: fixed_rtts, 	
+																"range_conns"	: range_conns, 
+																"fixed_conns"	: fixed_conns, 	
+																"free_b"		: free_b, 																				
+																"duration"		: DURATION, 
+																"marking"		: marking,
+																"m_m_rates"		: m_m_rates,
+																"guard_bands"	: guard_bands,
+																"e_f_rates"		: e_f_rates,
+																"queuelen"		: queuelen,
+																"queuelen_switch": qsw,
+																"tech"			: tech,
+																"switch_type"	: switch_type,
+																"visualization" : visualization,
+																"comp_rtt" 		: comp_rtt,
+																"strength"		: strength,
+																"bands"			: num_colors,
+																"symmetric"		: symmetric,
+																"e_f_rates"		: e_f_rates
 
+															}
 
-														configuration={
-															"cookie"		: cookie, 
-															"bn_cap"		: bn_cap, 	
-															"vr_limit"		: vr_limit, 	
-															"users_p_h"		: users_ph, 	
-															"n_users"		: n_users, 	
-															"g_rates"		: g_rates, 			
-															"range_rtts"	: range_rtts, 	
-															"fixed_rtts"	: fixed_rtts, 	
-															"range_conns"	: range_conns, 
-															"fixed_conns"	: fixed_conns, 	
-															"free_b"		: free_b, 																				
-															"duration"		: DURATION, 
-															"marking"		: marking,
-															"m_m_rates"		: m_m_rates,
-															"guard_bands"	: guard_bands,
-															"e_f_rates"		: e_f_rates,
-															"queuelen"		: queuelen,
-															"queuelen_switch": qsw,
-															"tech"			: tech,
-															"switch_type"	: switch_type,
-															"visualization" : visualization,
-															"comp_rtt" 		: comp_rtt,
-															"strength"		: strength,
-															"bands"			: num_colors	
-														}
-
-														configurations.append(configuration)
+															configurations.append(configuration)
 
 		
 	"""
@@ -353,9 +375,10 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 
 				cmd_ssh(
 					SWITCH_IP,  
-					"sudo sh config_ovs_uguale.sh {} {}".format(
+					"python config_ovs_uguale.py -c{} -q{} -n{}".format(
 						"127.0.0.1:6633",
-						configuration["queuelen_switch"]))
+						configuration["queuelen_switch"],
+						configuration["bands"]))
 				time.sleep(4)
 
 			else:
@@ -454,6 +477,7 @@ def main(argv):
 	-V<visualization> -S<queuelens on switch> -U<switch:standalone/uguale>\n\
 	-M<markers:no_markers/buckets_markers/iptables_markers>\n\
 	-Q<number of colors>\n\
+	-K<symmetric-bands-assignment>\n\
 	folder: folder to save files\n\
 	cookie: special message to save\n\
 	do-save: 1 to save \n\
@@ -464,7 +488,7 @@ def main(argv):
 	queuelens_switch : number or -1 to use the optimal value"
 	
 	try:
-		opts, args = getopt.getopt(argv,"hf:c:s:t:P:L:C:b:v:u:F:r:g:q:G:R:V:S:U:M:Q:")
+		opts, args = getopt.getopt(argv,"hf:c:s:t:P:L:C:b:v:u:F:r:g:q:G:R:V:S:U:M:Q:K:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
@@ -514,7 +538,9 @@ def main(argv):
 		elif opt in ("-M"):
 			markers = arg.split(",")
 		elif opt in ("-Q"):
-			colors = map(int,arg.split(","))		
+			colors = map(int,arg.split(","))	
+		elif opt in ("-K"):
+			symmetrics = map(my_bool,arg.split(","))	
 
 
 
@@ -529,7 +555,8 @@ def main(argv):
 
 	start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts, list_conns, 
 		bn_cap, vr_limit, users_phs, free_bs, repetitions, various_guaranteed, 
-		queuelens, gbs, comp_rtts, visualizations, queuelens_switch, switch_types, markers,colors)
+		queuelens, gbs, comp_rtts, visualizations, queuelens_switch, switch_types, 
+		markers,colors, symmetrics)
 
 if __name__ == "__main__":
    main(sys.argv[1:])

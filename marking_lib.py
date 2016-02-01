@@ -37,23 +37,43 @@ rates = {
 	rate2 :  2
 	g_rate :  1
 """
-def get_rates(g_rate, bn_cap, m_m_rate, num_colors):
+def get_rates(g_rate, bn_cap, m_m_rate, num_colors, symmetric, e_f_rate):
 
-	rates={}
-	delta = float(m_m_rate)/(num_colors-1)
 	rates = {}
-	rates[g_rate]=1
-	for i in range(1,num_colors):
-		dscp = i+1
-		new_rate = g_rate + (i*delta)
-		if (new_rate >= bn_cap) or (dscp==num_colors):
-			new_rate = bn_cap
 
-		rates[new_rate] = dscp
-		if new_rate>=bn_cap:
-			break
+	if symmetric:
+		nc2 = num_colors-2
+		delta = 2 * float(m_m_rate - e_f_rate) / float(nc2)
+
+		thr = e_f_rate - float((nc2/2)*delta)
+		dscp = 1
+		rates[thr] = 1 
+
+		for i in range(nc2):
+			thr += delta
+			dscp += 1
+			rates[thr] = dscp
+
+		rates[bn_cap] = num_colors 
+
+	else:
+		delta = float(m_m_rate)/(num_colors-1)
+		rates[g_rate]=1
+		for i in range(1,num_colors):
+			dscp = i+1
+			new_rate = g_rate + (i*delta)
+			if (new_rate >= bn_cap) or (dscp==num_colors):
+				new_rate = bn_cap
+
+			rates[new_rate] = dscp
+			if new_rate>=bn_cap:
+				break
 			
 	return rates
+
+
+
+
 
 
 """
@@ -84,15 +104,56 @@ Es. guard bands = 2
 ---------
 |	1	|
 ---------
+
+Symmetric
+
+---------
+|		|
+|	8	|
+|		|
+--------- <--- EFR + amplitude = b
+|	7	|
+---------
+|	6	|
+---------
+|	5	|
+--------- <---- EFR
+|	4	|
+---------
+|	3	|
+---------
+|	2	|
+--------- <--- EFR - amplitude = a
+|		|
+|	1	|
+|		|
+---------
+
+The space [a,b] is divided into num_colors-2 bands.
+Band 1 is assigned to what is under a
+Band num_colors is assigne to what is over b
+Since the EFR must be between two bands, 
+only even num_colors are expected.
+
+amplitude = (C/10)*guard_bands
+amplitude <= EFR
+amplitude <= C - EFR
+
 """
-def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, num_colors):
+def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, num_colors, symmetric=False):
+
+	g_max = max(map(rate_to_int, g_rates)) # maximum guaranteed rate [int] 
+	mfr = g_max + ((free_b*C)/float(n_users)) # maximum fair rate at which an user will converge
+
+	if symmetric:
+		amplitude = (C/10.0)*guard_bands
+		amplitude = min(mfr, amplitude)
+		amplitude = min(C - mfr, amplitude)
+		return mfr + amplitude
 
 	# If not used, c must be divided simply in num_colors bands
 	if guard_bands == -1 or guard_bands>=num_colors:
 		return (num_colors-1)*(C/float(num_colors))
-
-	g_max = max(map(rate_to_int, g_rates)) # maximum guaranteed rate [int] 
-	mfr = g_max + ((free_b*C)/float(n_users)) # maximum fair rate at which an user will converge
 
 	if guard_bands == 0:
 		return mfr
@@ -106,8 +167,6 @@ def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, num_colors):
 
 	#print "MFS{} - DELTA{} - MMR {}".format(num_to_rate(mfr), num_to_rate(delta), num_to_rate(mmr))
 	return min(mmr, C)
-
-
 
 
 
