@@ -5,27 +5,27 @@ import sys, getopt, subprocess
 """
 Execute a command in the terminal
 """
-def cmd(command):
+def sudo_cmd(command):
 	subprocess.call("sudo {}".format(command), shell=True) 
 
 
 def configure_uguale(controller, queuelen, num_queues):
 
-	# Set the switch in secure-mode: it will need a controller, stop to learn
-	cmd("ovs-vsctl set-fail-mode br0 secure")
+	# Set the switch in secure-mode
+	#it will need a controller, stop to learn
+	sudo_cmd("ovs-vsctl set-fail-mode br0 secure")
 
-	# Delete flows and QoS
-	cmd("ovs-ofctl -O openflow13 del-flows br0")
-	cmd("ovs-vsctl --all destroy queue")
-	cmd("ovs-vsctl --all destroy qos")
+	# Delete current flows and QoS configurations
+	sudo_cmd("ovs-ofctl -O openflow13 del-flows br0")
+	sudo_cmd("ovs-vsctl --all destroy queue")
+	sudo_cmd("ovs-vsctl --all destroy qos")
 
 	# Set the queuelen
 	for i in [1,2,3,4]:
-		cmd("ifconfig eth{} txqueuelen {}".format(i,queuelen))
-		cmd("tc qdisc del dev eth{} root".format(i))
+		sudo_cmd("ifconfig eth{} txqueuelen {}".format(i,queuelen))
+		sudo_cmd("tc qdisc del dev eth{} root".format(i))
 
-	# Create N RR queues with OVS
-
+	# Create N Round robin queues on eth4 with ovs-vsctl
 	qos = "ovs-vsctl set port eth4 qos=@newqos -- \
 	--id=@newqos create qos type=linux-htb other-config:max-rate=1000000 \
 	queues="
@@ -42,8 +42,9 @@ def configure_uguale(controller, queuelen, num_queues):
 		if i < num_queues:
 			qos += " -- "
 
-	cmd(qos)
+	sudo_cmd(qos)
 
+	# OLD SH COMMAND: 
 	# ovs-vsctl set port eth4 qos=@newqos -- \
 	# --id=@newqos create qos type=linux-htb other-config:max-rate=1000000 \
 	# queues=1=@q1,2=@q2,3=@q3,4=@q4,5=@q5,6=@q6,7=@q7,8=@q8 -- \
@@ -55,23 +56,21 @@ def configure_uguale(controller, queuelen, num_queues):
 	# --id=@q6 create queue other-config:min-rate=600 other-config:max-rate=1000000 -- \
 	# --id=@q7 create queue other-config:min-rate=600 other-config:max-rate=1000000 -- \
 	# --id=@q8 create queue other-config:min-rate=600 other-config:max-rate=1000000
-
-
 	# Verifiy queues
-	#ovs-vsctl list qos
-	#ovs-vsctl list queue
+	# ovs-vsctl list qos
+	# ovs-vsctl list queue
 
-	# Substitute them with prio queues
-	cmd("ifconfig eth4 txqueuelen {}".format(queuelen))
-	cmd("tc qdisc del dev eth4 root")
-	cmd("tc qdisc add dev eth4 root handle 1: prio bands {}".format(num_queues+1))
+	# Substitute the round robin queues with prio queues
+	sudo_cmd("ifconfig eth4 txqueuelen {}".format(queuelen))
+	sudo_cmd("tc qdisc del dev eth4 root")
+	sudo_cmd("tc qdisc add dev eth4 root handle 1: prio bands {}".format(num_queues+1))
 
 	# Verify kernel queues
 	#tc qdisc show dev eth4
 	#tc class show dev eth4
 
 	# Connect to the controller
-	cmd("ovs-vsctl set-controller br0 tcp:{}".format(controller))
+	sudo_cmd("ovs-vsctl set-controller br0 tcp:{}".format(controller))
 
 	# Check flows
 	#sleep 5

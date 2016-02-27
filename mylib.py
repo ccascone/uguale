@@ -174,10 +174,10 @@ Open a new terminal (xterm) and execute an ssh commands from it
 # 	cmd(cmd_str)
 # 	print cmd_str
 
-def cmd_ssh(pc_ip,command):
-	cmd_str = "ssh {} '{}' &".format(pc_ip, command)
-	cmd(cmd_str)
-	print cmd_str
+# def cmd_ssh(pc_ip,command):
+# 	cmd_str = "ssh {} '{}' &".format(pc_ip, command)
+# 	cmd(cmd_str)
+# 	print cmd_str
 
 
 
@@ -186,6 +186,25 @@ def cmd_ssh(pc_ip,command):
 # 	cmd(cmd_str)
 # 	print cmd_str
 
+def cmd_ssh(host, remoteCmd):
+    # localCmd = "/usr/bin/ssh", host, "<<", "EOF\n{}\nEOF".format(remoteCmd)
+    localCmd = "/usr/bin/ssh", host, remoteCmd
+    print "*** Executing SSH command: {}".format(localCmd)
+    try:
+        result = subprocess.check_output(
+            localCmd, stderr=subprocess.STDOUT, shell=False)
+    except subprocess.CalledProcessError as e:
+        result = e.output
+        print "*** Error with SSH command {}: {}".format(localCmd, result)
+    return result
+
+
+ def cmd_ssh_bg(host, remoteCmd):
+    # localCmd = "/usr/bin/ssh", host, "<<", "EOF\n{}\nEOF".format(remoteCmd)
+    localCmd = "/usr/bin/ssh", host, remoteCmd
+    print "*** Executing SSH command in BG: {}".format(localCmd)
+    subprocess.Popen(
+            localCmd, stdout=FNULL, stderr=FNULL, shell=False)
 
 
 #------------------------ OTHER UTILITIES -------------------------#
@@ -241,10 +260,21 @@ This code must be mantained on a separate script
 because we will temporary lose connection with the PC.
 It simply delete OVS on the pc
 """
-def restore_hosts():
+def reset_hosts():
 	for host in sorted(ADDRESSES):
-		str_ssh = "sudo sh delete_ovs.sh {}".format(host)
+		str_ssh = "sudo sh reset_redfox14.sh {}".format(host)
 		cmd_ssh(host, str_ssh)
+
+def reset_switch():
+	cmd_ssh_bg(SWITCH_IP,"sudo sh reset_redfox0.sh")
+	time.sleep(2)
+
+
+def reboot_redfox14():
+	cmd_ssh_bg(SWITCH_IP,"sudo sh /redfox-automations/redfox0/reboot_redfox14")
+	time.sleep(2)
+
+	 
 
 
 

@@ -88,7 +88,7 @@ def clients_thread(params):
 
 		print str_ssh
 
-		cmd_ssh(host, str_ssh)	
+		cmd_ssh_bg(host, str_ssh)	
 
 		print "Called {}".format(host)
 
@@ -99,13 +99,13 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 	queuelens, gbs, comp_rtts, visualizations, queuelens_switch, switch_types, 
 	markers,colors, symmetrics):
 
-	restore_switch()
-	restore_hosts()
+	#------------------------------------ RESET THE NETWORK --------------------------------
 	killall("iperf")
 	killall("xterm")
-	killall("bwm-ng")
-	# restore_hosts() # delete ovs on hosts
-	update_hosts_code() # send the update programs code to all PCs
+	killall("bwm-ng")	
+	reset_switch()
+	reset_hosts()
+	update_hosts_code()
 
 	#------------------------------------ TECHNOLOGY SETTINGS --------------------------------
 	"""
@@ -117,7 +117,7 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 	"""
 	tech= TECH_OVS
 
-	#------------------------------------ BEGIN TEST --------------------------------
+	#------------------------------------ PREPARE TEST CONFIGURATIONS --------------------------------
 
 	"""
 	We can have two modalities for both rtt and conns:
@@ -344,8 +344,18 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 	random.shuffle(configurations)	
 
 	# try:	
+	# except (KeyboardInterrupt):
+	# 	print "Test interrupted"
+	# finally:
+	# 	print "Test terminated"
+	# 	if len(failed_configurations)>0:
+	# 		print "Failed tests:", failed_configurations
+
+
 	if tech != TECH_NONE:
+		# Create OVS and veths
 		set_up_hosts(tech)
+
 	for repetition in range(repetitions):
 		for configuration in configurations:
 
@@ -358,21 +368,24 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 				print "Skip, existing test instance {}".format(instance_name)
 				continue
 
-			restore_switch()
+			reset_switch()
 			#---------------------- CONFIGURE SWITCH ----------------------#
 
 
 			if configuration["switch_type"]==STANDALONE:
+
+				# Set the queuelen
 				cmd_ssh(
 					SWITCH_IP, 
-					"sudo sh config_ovs_standalone.sh {}".format(configuration["queuelen_switch"]))
-				time.sleep(2)
+					"sudo sh set ovs_standalone_queues.sh {}".format(configuration["queuelen_switch"]))
 
 			elif configuration["switch_type"]==UGUALE:
 
-				cmd_ssh(SWITCH_IP, "sudo ryu-manager /home/redfox/ryu/ryu/app/lucab/uguale.py")
+				# Start the controller
+				cmd_ssh_bg(SWITCH_IP, "sudo ryu-manager /home/redfox/ryu/ryu/app/lucab/uguale.py")
 				time.sleep(2)
 
+				# Put the switch in UGUALE mode
 				cmd_ssh(
 					SWITCH_IP,  
 					"python config_ovs_uguale.py -c{} -q{} -n{}".format(
@@ -382,7 +395,7 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 				time.sleep(4)
 
 			else:
-				print "No valid switch to configure, exiting"
+				print "Invalid switch configuration, exiting"
 				return
 				
 
@@ -429,27 +442,15 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 						print "Test failed too many times... skipping to next test!"
 						append_to_csv(configuration, [])
 
-	# except (KeyboardInterrupt):
-	# 	print "Test interrupted"
-	# finally:
-	# 	print "Test terminated"
-	# 	if len(failed_configurations)>0:
-	# 		print "Failed tests:", failed_configurations
-
-	# 	# restore_switch()
-	# 	restore_hosts()
-	# 	killall("iperf")
-	# 	killall("xterm")
-	# 	killall("bwm-ng")
-	# 	killall("python")
 
 
+	reset_switch()
+	reset_hosts()
+	killall("iperf")
+	killall("xterm")
+	killall("bwm-ng")
+	reboot_redfox14()
 
-def restore_switch():
-	cmd_ssh(SWITCH_IP,"sudo sh config_ovs_standalone.sh 1000")
-	time.sleep(2)
-	cmd_ssh(SWITCH_IP,"sudo killall ryu-manager")	
-	time.sleep(1)
 
 def main(argv):
 
