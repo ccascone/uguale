@@ -343,113 +343,106 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 		datetime.timedelta(seconds = secs*MAX_TRIES))
 	random.shuffle(configurations)	
 
-	# try:	
-	# except (KeyboardInterrupt):
-	# 	print "Test interrupted"
-	# finally:
-	# 	print "Test terminated"
-	# 	if len(failed_configurations)>0:
-	# 		print "Failed tests:", failed_configurations
+	try:	
+		if tech != TECH_NONE:
+			# Create OVS and veths
+			set_up_hosts(tech)
+
+		for repetition in range(repetitions):
+			for configuration in configurations:
+
+				configuration["repetition"] = repetition
+				instance_name = get_instance_name(configuration)
+				pickle_name = "{}.p".format(instance_name)
+				file_name = "{}/{}".format(folder, pickle_name)
+
+				if os.path.isfile(file_name):
+					print "Skip, existing test instance {}".format(instance_name)
+					continue
+
+				reset_switch()
+				#---------------------- CONFIGURE SWITCH ----------------------#
 
 
-	if tech != TECH_NONE:
-		# Create OVS and veths
-		set_up_hosts(tech)
+				if configuration["switch_type"]==STANDALONE:
 
-	for repetition in range(repetitions):
-		for configuration in configurations:
+					# Set the queuelen
+					cmd_ssh(
+						SWITCH_IP, 
+						"sudo sh set ovs_standalone_queues.sh {}".format(configuration["queuelen_switch"]))
 
-			configuration["repetition"] = repetition
-			instance_name = get_instance_name(configuration)
-			pickle_name = "{}.p".format(instance_name)
-			file_name = "{}/{}".format(folder, pickle_name)
+				elif configuration["switch_type"]==UGUALE:
 
-			if os.path.isfile(file_name):
-				print "Skip, existing test instance {}".format(instance_name)
-				continue
+					# Start the controller
+					cmd_ssh_bg(SWITCH_IP, "sudo ryu-manager /home/redfox/ryu/ryu/app/lucab/uguale.py")
+					time.sleep(2)
 
-			reset_switch()
-			#---------------------- CONFIGURE SWITCH ----------------------#
+					# Put the switch in UGUALE mode
+					cmd_ssh(
+						SWITCH_IP,  
+						"python config_ovs_uguale.py -c{} -q{} -n{}".format(
+							"127.0.0.1:6633",
+							configuration["queuelen_switch"],
+							configuration["bands"]))
+					time.sleep(4)
 
-
-			if configuration["switch_type"]==STANDALONE:
-
-				# Set the queuelen
-				cmd_ssh(
-					SWITCH_IP, 
-					"sudo sh set ovs_standalone_queues.sh {}".format(configuration["queuelen_switch"]))
-
-			elif configuration["switch_type"]==UGUALE:
-
-				# Start the controller
-				cmd_ssh_bg(SWITCH_IP, "sudo ryu-manager /home/redfox/ryu/ryu/app/lucab/uguale.py")
-				time.sleep(2)
-
-				# Put the switch in UGUALE mode
-				cmd_ssh(
-					SWITCH_IP,  
-					"python config_ovs_uguale.py -c{} -q{} -n{}".format(
-						"127.0.0.1:6633",
-						configuration["queuelen_switch"],
-						configuration["bands"]))
-				time.sleep(4)
-
-			else:
-				print "Invalid switch configuration, exiting"
-				return
-				
-
-			print("Executing {} ...".format(instance_name))
-
-			for curr_try in range(MAX_TRIES):
-				print "Try number {}...".format(curr_try)
-				killall("iperf")
-				killall("xterm")
-				configuration["start_ts"] = time.time()+SYNC_TIME
-				clients=threading.Thread(target=clients_thread, args=(configuration,))
-				clients.start()
-				tcp_ports = range(FIRST_TCP_PORT,FIRST_TCP_PORT+configuration["users_p_h"])
-				udp_ports = []
-				data = ps.run_server("eth0", tcp_ports, udp_ports, 
-					interactive = False, 
-					duration = configuration["duration"]+SYNC_TIME, 
-					do_visualize = configuration["visualization"],
-					expected_users = configuration["n_users"],
-					check_time = BIRTH_TIMEOUT + SYNC_TIME)
-
-				# if not data:
-				# 	print "No data saved, test failed"
-				# 	continue
-
-
-				#---------------------- SAVING ----------------------#				
-				test={"params":configuration, "data":data}
-
-				if vr.test_is_valid(test):
-					print "Valid test"
-					if do_save:
-						if not os.path.exists(folder):
-							os.makedirs(folder)
-						# Save the test in a file
-						pickle.dump(test, open(file_name,"wb"))
-						# append results to CSV
-						stats = vr.get_stats(test)
-						append_to_csv(configuration, stats)
-					break # exit from current tries
 				else:
-					print "Errors in data, test failed"
-					if curr_try == MAX_TRIES-1:
-						print "Test failed too many times... skipping to next test!"
-						append_to_csv(configuration, [])
+					print "Invalid switch configuration, exiting"
+					return
+					
+
+				print("Executing {} ...".format(instance_name))
+
+				for curr_try in range(MAX_TRIES):
+					print "Try number {}...".format(curr_try)
+					killall("iperf")
+					killall("xterm")
+					configuration["start_ts"] = time.time()+SYNC_TIME
+					clients=threading.Thread(target=clients_thread, args=(configuration,))
+					clients.start()
+					tcp_ports = range(FIRST_TCP_PORT,FIRST_TCP_PORT+configuration["users_p_h"])
+					udp_ports = []
+					data = ps.run_server("eth0", tcp_ports, udp_ports, 
+						interactive = False, 
+						duration = configuration["duration"]+SYNC_TIME, 
+						do_visualize = configuration["visualization"],
+						expected_users = configuration["n_users"],
+						check_time = BIRTH_TIMEOUT + SYNC_TIME)
+
+					# if not data:
+					# 	print "No data saved, test failed"
+					# 	continue
 
 
+					#---------------------- SAVING ----------------------#				
+					test={"params":configuration, "data":data}
 
-	reset_switch()
-	reset_hosts()
-	killall("iperf")
-	killall("xterm")
-	killall("bwm-ng")
-	reboot_redfox14()
+					if vr.test_is_valid(test):
+						print "Valid test"
+						if do_save:
+							if not os.path.exists(folder):
+								os.makedirs(folder)
+							# Save the test in a file
+							pickle.dump(test, open(file_name,"wb"))
+							# append results to CSV
+							stats = vr.get_stats(test)
+							append_to_csv(configuration, stats)
+						break # exit from current tries
+					else:
+						print "Errors in data, test failed"
+						if curr_try == MAX_TRIES-1:
+							print "Test failed too many times... skipping to next test!"
+							append_to_csv(configuration, [])
+	except (KeyboardInterrupt):
+	 	print "Test interrupted"
+	finally:
+	 	print "Test terminated"
+		reset_switch()
+		reset_hosts()
+		killall("iperf")
+		killall("xterm")
+		killall("bwm-ng")
+		reboot_redfox14()
 
 
 def main(argv):
