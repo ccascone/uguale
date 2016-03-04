@@ -8,18 +8,18 @@ def calc_all_files(folder):
 		if file_name[-2:] == ".p":
 			instance_name = file_name[:-2]
 			print "Processing {}...".format(instance_name)
-			my_test = pickle.load(open("{}/{}".format(folder,file_name),"rb"))
+			my_test = pickle.load(open("{}/{}".format(folder, file_name), "rb"))
 			if not vr.test_is_valid(my_test):
 				print "ERROR: invalid test! Skipping..."
 				continue
 			append_to_csv(my_test["params"], vr.get_stats(my_test))
 
 def main(argv):
-	folder =  "/"
+	folder = "/"
 	help_string = "Usage: -f <folder>"
 
 	try:
-		opts, args = getopt.getopt(argv,"hf:")
+		opts, args = getopt.getopt(argv, "hf:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
@@ -34,4 +34,4 @@ def main(argv):
 	calc_all_files(folder)
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+	main(sys.argv[1:])

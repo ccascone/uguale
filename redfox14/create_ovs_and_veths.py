@@ -26,7 +26,7 @@ def run_program(pc_ip):
 
 	print "Setting up veths"
 	for i in range(NUM_VETHS):
-		veth_id = i+1
+		veth_id = i + 1
 		veth_ip = ADDRESSES[pc_ip][i]
 		veth_intf="veth{}".format(veth_id)
 		sudo_cmd("ovs-vsctl add-port br0 veth{} -- set interface veth{} type=internal".format(veth_id, veth_id))
@@ -43,7 +43,7 @@ def run_program(pc_ip):
 def main(argv):
 	help_string = "Usage: -s<pc-ip>"
 	try:
-		opts, args = getopt.getopt(argv,"hs:")
+		opts, args = getopt.getopt(argv, "hs:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
@@ -56,6 +56,6 @@ def main(argv):
 			pc_ip = arg
 
 	run_program(pc_ip)
-	
+
 if __name__ == "__main__":
 	main(sys.argv[1:])

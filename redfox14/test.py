@@ -1,12 +1,9 @@
 #!/usr/bin/python
 import time, threading, os, pickle, random, sys, getopt, datetime
 import plot_server as ps
-import numpy as np
 import marking_lib as ml
 import view_result as vr
 from mylib import *
-
-
 
 """
 Pass parameters to hosts
@@ -39,7 +36,7 @@ def clients_thread(params):
 			params["duration"],	params["start_ts"],
 
 			",".join(map(str, fixed_conns_host)),
-			",".join(map(str,fixed_rtts_host)),
+			",".join(map(str, fixed_rtts_host)),
 			params["vr_limit"], params["markers"],
 
 			params["bn_cap"],
@@ -59,9 +56,7 @@ def start_test(
 		list_num_bands, list_guard_bands, bn_cap, 
 		list_free_b, list_do_comp_rtt, do_symm):
 
-
-
-	#------------------------------------ RESET THE NETWORK --------------------------------
+	# ------------------------------------ RESET THE NETWORK --------------------------------
 	killall("iperf")
 	killall("xterm")
 	killall("bwm-ng")	
@@ -70,13 +65,13 @@ def start_test(
 	for host in ADDRESSES:
 		cmd("scp *.py redfox@{}:~".format(host))	
 		cmd("scp *.sh redfox@{}:~".format(host))
-	
+
 	strength = 0.15
 	repetitions = 1
 	n_users = sum(list_users)
 	tech = TECH_OVS
 
-	#------------------------------------ PREPARE TEST CONFIGURATIONS --------------------------------
+	# ------------------------------------ PREPARE TEST CONFIGURATIONS --------------------------------
 	"""
 	Generate the configurations list
 	"""
@@ -89,7 +84,7 @@ def start_test(
 					for free_b in list_free_b:
 						for do_comp_rtt in list_do_comp_rtt:
 
-							#----------- Skip useless standalone configs. ----------
+							# ----------- Skip useless standalone configs. ----------
 							if switch_type == STANDALONE:
 								if (
 									(len(list_markers)>1 and markers != NO_MARKERS) or
@@ -101,8 +96,7 @@ def start_test(
 								):					
 									print "Wrong standalone configuration, skip test"
 									continue
-							
-							#----------- Skip useless uguale configs. ----------
+							# ----------- Skip useless uguale configs. ----------
 							else:
 								if markers == NO_MARKERS:
 									print "UGUALE without markers, skip test"
@@ -112,12 +106,11 @@ def start_test(
 									print "guard_bands > num_bands, skip test"
 									continue	
 
-								if do_symm and num_bands%2!=0:
+								if do_symm and num_bands % 2!=0:
 									print "Only even num_bands, skip test"
 									continue
-													
 
-							#------------------------ RTTS ----------------------
+							# ------------------------ RTTS ----------------------
 							"""
 							If the range has zero difference, all users have the same rtt
 							If not, RTTs will be equally distributed in the range
@@ -135,15 +128,15 @@ def start_test(
 							else:
 								fixed_rtts = list_rtts
 								range_rtts = [min(list_rtts), max(list_rtts)]
-							
+
 							if (len(set(fixed_rtts))==1 and 
 								len(list_do_comp_rtt)>1 and 	
 								do_comp_rtt):
 								print "Useless RTT compensation, skip test"
 								continue
 
-							#----------------TCP CONNECTIONS ---------------
-							
+							# ----------------TCP CONNECTIONS ---------------
+
 							fixed_conns = []
 							if len(range_conns)>0:
 								delta_conns = range_conns[1]-range_conns[0]
@@ -157,18 +150,17 @@ def start_test(
 									9 users --> (2,3,4,5,6,7,8,2,3)
 									if not divisible, return to random
 									"""
-									conn_list = range(range_conns[0],range_conns[1]+1)
+									conn_list = range(range_conns[0], range_conns[1]+1)
 									i=0
 									for u in range(n_users):
 										fixed_conns.append(conn_list[i])
-										i=(i+1)%len(conn_list)
+										i=(i+1) % len(conn_list)
 									random.shuffle(fixed_conns)	
 							else:
 								fixed_conns = list_conns
 								range_conns = [min(list_conns), max(list_conns)]									
 
-							
-							#--------------- BANDS ASSIGNMENT ----------------
+							# --------------- BANDS ASSIGNMENT ----------------
 
 							g_rates = [] # guaranteed rates
 							e_f_rates = [] # expected fair rates
@@ -196,12 +188,10 @@ def start_test(
 								m_m_rate = m_m_rate * coeffs[i]								
 								m_m_rates.append(num_to_rate(m_m_rate))
 
-
 							if queuelen == -1:
 								qsw = optimal_queue_len(fixed_rtts, fixed_conns, C)
 							else:
 								qsw = queuelen
-
 
 							configuration={
 								"cookie"		: cookie, 
@@ -227,18 +217,18 @@ def start_test(
 								"do_comp_rtt" 	: do_comp_rtt,
 								"strength"		: strength,
 								"do_symm"		: do_symm,
-								 	
+
 								"g_rates"		: g_rates, 				
 								"m_m_rates"		: m_m_rates,
 								"e_f_rates"		: e_f_rates,
-																												
+
 								"duration"		: DURATION
 							}
 
 							configurations.append(configuration)
 
 	random.shuffle(configurations)	
-	
+
 	"""
 	Calculate Estimated time
 	"""
@@ -250,14 +240,12 @@ def start_test(
 
 	secs = num_tests*DURATION
 	print "{} Tests, total duration: {}".format(
-		num_tests, datetime.timedelta(seconds = secs))
+		num_tests, datetime.timedelta(seconds=secs))
 
-
-	
 	"""
 	Set the network
 	"""
-	limit_interface(vr_limit,"eth0")
+	limit_interface(vr_limit, "eth0")
 	for host in sorted(ADDRESSES):
 		str_ssh = "python create_ovs_and_veths.py -s{}".format(host)
 		cmd_ssh(host, str_ssh)
@@ -274,7 +262,7 @@ def start_test(
 					print "Skip, existing test instance {}".format(instance_name)
 					continue
 
-				#---------------------- CONFIGURE SWITCH ----------------------#
+				# ---------------------- CONFIGURE SWITCH ----------------------#
 
 				killall("iperf")
 				killall("xterm")
@@ -304,7 +292,6 @@ def start_test(
 							configuration["num_bands"]))
 					time.sleep(4)
 
-
 				print("Executing {} ...".format(instance_name))
 
 				for curr_try in range(MAX_TRIES):
@@ -312,24 +299,23 @@ def start_test(
 					killall("iperf")
 					killall("xterm")
 					killall("bwm-ng")
-					
+
 					configuration["start_ts"] = time.time()+SYNC_TIME
 					clients=threading.Thread(target=clients_thread, args=(configuration,))
 					clients.start()
 
-					tcp_ports = range(FIRST_TCP_PORT,FIRST_TCP_PORT+max(list_users))
+					tcp_ports = range(FIRST_TCP_PORT, FIRST_TCP_PORT+max(list_users))
 					udp_ports = []
 					data = ps.run_server(
 						"eth0", tcp_ports, udp_ports,
-						interactive = False, 
-						duration = configuration["duration"]+SYNC_TIME+2, 
-						do_visualize = do_visualize,
-						expected_users = n_users,
-						check_time = BIRTH_TIMEOUT + SYNC_TIME)
+						interactive=False, 
+						duration=configuration["duration"]+SYNC_TIME+2, 
+						do_visualize=do_visualize,
+						expected_users=n_users,
+						check_time=BIRTH_TIMEOUT + SYNC_TIME)
 
-
-					#---------------------- SAVING ----------------------#				
-					test={"params":configuration, "data":data}
+					# ---------------------- SAVING ----------------------#				
+					test={"params": configuration, "data": data}
 
 					if vr.test_is_valid(test):
 						print "Valid test"
@@ -337,7 +323,7 @@ def start_test(
 							if not os.path.exists(folder):
 								os.makedirs(folder)
 							# Save the test in a file
-							pickle.dump(test, open(file_name,"wb"))
+							pickle.dump(test, open(file_name, "wb"))
 							# append results to CSV
 							stats = vr.get_stats(test)
 							append_to_csv(configuration, stats)
@@ -356,7 +342,7 @@ def start_test(
 		killall("iperf")
 		killall("xterm")
 		killall("bwm-ng")
-		limit_interface("1g","eth0")
+		limit_interface("1g", "eth0")
 
 
 def main(argv):
@@ -390,7 +376,7 @@ def main(argv):
 		print help_string
 		sys.exit(2)
 
-	#--------------- DEFAULT VALUES -------------
+	# --------------- DEFAULT VALUES -------------
 	folder = str(time.time)
 	cookie = "test"
 	do_save = False
@@ -400,7 +386,7 @@ def main(argv):
 	list_conns = []
 	range_rtts = []
 	list_rtts = []
-	list_users = [1,1,1]
+	list_users = [1, 1, 1]
 
 	vr_limit = "100m"
 	list_markers = ["no_markers"]
@@ -430,15 +416,15 @@ def main(argv):
 			do_visualize = my_bool(arg)
 
 		elif opt in ("-p"):
-			range_conns = map(int,arg.split(","))
+			range_conns = map(int, arg.split(","))
 		elif opt in ("-P"):
-			list_conns = map(int,arg.split(","))
+			list_conns = map(int, arg.split(","))
 		elif opt in ("-t"):
-			range_rtts = map(float,arg.split(","))
+			range_rtts = map(float, arg.split(","))
 		elif opt in ("-T"):
-			list_rtts = map(float,arg.split(","))
+			list_rtts = map(float, arg.split(","))
 		elif opt in ("-u"):
-			list_users = map(int,arg.split(","))
+			list_users = map(int, arg.split(","))
 
 		elif opt in ("-C"):
 			vr_limit = arg
@@ -446,32 +432,31 @@ def main(argv):
 			list_markers = arg.split(",")
 
 		elif opt in ("-q"):
-			list_queuelen = map(int,arg.split(","))
+			list_queuelen = map(int, arg.split(","))
 		elif opt in ("-S"):
 			switch_type = arg
 
 		elif opt in ("-Q"):
-			list_num_bands = map(int,arg.split(","))
+			list_num_bands = map(int, arg.split(","))
 		elif opt in ("-g"):
-			list_guard_bands = map(int,arg.split(","))
+			list_guard_bands = map(int, arg.split(","))
 		elif opt in ("-b"):
 			bn_cap = arg
 		elif opt in ("-F"):
-			list_free_b = map(float,arg.split(","))
+			list_free_b = map(float, arg.split(","))
 		elif opt in ("-r"):
-			list_do_comp_rtt = map(my_bool,arg.split(","))	
+			list_do_comp_rtt = map(my_bool, arg.split(","))	
 		elif opt in ("-k"):
 			do_symm = my_bool(arg)
-
 
 	n_users = sum(list_users)
 
 	if ((len(range_rtts)==0 and len(list_rtts)==0) # no rtt given
-	or (len(range_conns)==0 and len(list_conns)==0) #no conns given
+	or (len(range_conns)==0 and len(list_conns)==0) # no conns given
 	or (len(range_conns)>0 and len(range_conns)!=2) # range must have 2 boundaries
 	or (len(range_rtts)>0 and len(range_rtts)!=2)  # range must have 2 boundaries
-	or (len(list_rtts)>0 and len(list_rtts)!= n_users) #the list should have a value for each user
-	or (len(list_conns)>0 and len(list_conns)!= n_users) #the list should have a value for each user
+	or (len(list_rtts)>0 and len(list_rtts)!= n_users) # the list should have a value for each user
+	or (len(list_conns)>0 and len(list_conns)!= n_users) # the list should have a value for each user
 	or (len(list_users)!=len(HOST_IDS))): # a number for each PC
 		print "Wrong users configuration"
 		print help_string
@@ -497,4 +482,4 @@ def main(argv):
 		list_free_b, list_do_comp_rtt, do_symm)
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+	main(sys.argv[1:])

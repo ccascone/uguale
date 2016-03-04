@@ -1,4 +1,5 @@
 from mylib import *
+
 """
 This library contains functions that executes tc calls
 """
@@ -19,24 +20,24 @@ def print_tc_configuration(intf, qdiscs=[]):
 		for parent in qdiscs:
 			sudo_cmd("tc filter show dev {} parent {}:".format(intf, parent))
 
-#------------------------------------- DSMARK --------------------------------------#
+# ------------------------------------- DSMARK --------------------------------------#
 
 def add_dsmark_qdisc(intf, parent_id, dsmark_qdisc_id, num_classes, default_class):
 	command = "tc qdisc add dev {} {} handle {}: dsmark indices {} default {}".format(
-			intf,parent_string(parent_id),dsmark_qdisc_id, num_classes, default_class)
+			intf, parent_string(parent_id), dsmark_qdisc_id, num_classes, default_class)
 	sudo_cmd(command)
 
 def change_dsmark_class(intf, dsmark_qdisc_id, dsmark_class_id, dscp):
 	# print "Changing dsmark class {}:{} to mark DSCP {}".format(
 	# 	dsmark_qdisc_id, dsmark_class_id, dscp)
 	command = "tc class change dev {} parent {}: classid {}:{} dsmark mask 0xff value {}".format(
-			intf, dsmark_qdisc_id, dsmark_qdisc_id, dsmark_class_id, hex(dscp<<2))
+			intf, dsmark_qdisc_id, dsmark_qdisc_id, dsmark_class_id, hex(dscp << 2))
 	sudo_cmd(command)
 
 
 def add_dsmark_filter(intf, dsmark_qdisc_id, prio, rate, burst, mtu, dsmark_class_id, protocol="", dport=0, fw=-1):
 
-	match_field, police_field = "" , ""
+	match_field, police_field = "", ""
 
 	if protocol!="" and dport!=0: # match a destination port
 		match_field = "u32 match ip dport {} 0xffff".format(dport)		
@@ -47,7 +48,8 @@ def add_dsmark_filter(intf, dsmark_qdisc_id, prio, rate, burst, mtu, dsmark_clas
 
 	# if a policer id defined
 	if (rate>0 and burst>0 and mtu>0):
-		police_field = "police rate {}bit burst {} mtu {} continue ".format(rate,burst,mtu)
+		police_field = "police rate {}bit burst {} mtu {} continue ".format(
+			rate, burst, mtu)
 		# note the space at the and of the string
 
 	command = "tc filter add dev {} parent {}: protocol ip prio {} {} {}classid {}:{}".format(
@@ -57,9 +59,7 @@ def add_dsmark_filter(intf, dsmark_qdisc_id, prio, rate, burst, mtu, dsmark_clas
 
 	sudo_cmd(command)
 
-
-
-#------------------------------------- NETEM --------------------------------------#
+# ------------------------------------- NETEM --------------------------------------#
 
 def add_netem_qdisc(intf, parent_id, netem_qdisc_id, rate=0, delay=0, limit=0):
 
@@ -68,7 +68,7 @@ def add_netem_qdisc(intf, parent_id, netem_qdisc_id, rate=0, delay=0, limit=0):
 		return
 
 	my_rate, my_delay, my_limit = "", "", ""
-	
+
 	if rate>0:
 		my_rate = "rate {}".format(rate)
 
@@ -90,8 +90,7 @@ def parent_string(parent_id):
 	else:
 		return "parent {}:".format(parent_id)
 
-
-
 def add_pfifo_qdisc(intf, parent_id, pfifo_id):
-	command = "tc qdisc add dev {} {} handle {}: pfifo".format(intf, parent_string(parent_id),pfifo_id)
+	command = "tc qdisc add dev {} {} handle {}: pfifo".format(
+		intf, parent_string(parent_id), pfifo_id)
 	sudo_cmd(command)

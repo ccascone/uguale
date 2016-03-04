@@ -1,18 +1,17 @@
 #!/usr/bin/python
-
 from mylib import *
 import tc_lib as tc
 import iptables_lib as ipt
 import marking_lib as ml
 
-#-------------------- METER/MARKER WITH BUCKETS -----------------------#
+# -------------------- METER/MARKER WITH BUCKETS -----------------------#
 
 """
 All packets that pass through the dsmark will
 be classified by token bucket filters (no ports lookup)
 """
 def add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands, 
-	dest_port_tcp=0, veth_id=0,):
+	dest_port_tcp=0, veth_id=0):
 	"""
 	------------- <---4000
 	|			|
@@ -56,10 +55,10 @@ def add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands,
 			tc.add_dsmark_filter(intf, dsmark_qdisc_id, prio, width, burst, mtu, dscp, protocol="tcp", dport=dest_port_tcp)	
 			# add_dsmark_filter(intf, dsmark_qdisc_id, prio, width, burst, mtu, dscp, fw=veth_id)	
 		else:
-			tc.add_dsmark_filter(intf, dsmark_qdisc_id, prio, 0,0,0, dscp, protocol="tcp", dport=dest_port_tcp)	
+			tc.add_dsmark_filter(intf, dsmark_qdisc_id, prio, 0, 0, 0, dscp, protocol="tcp", dport=dest_port_tcp)	
 			# add_dsmark_filter(intf, dsmark_qdisc_id, prio, 0,0,0, dscp, fw=veth_id)	
 
-#------------------- METER/MARKER WITH IPTABLES -----------------------------#
+# ------------------- METER/MARKER WITH IPTABLES -----------------------------#
 """
 iptables will call the classify action that will send
 packets to dsmark classes.
@@ -71,8 +70,8 @@ def iptables_meter_marker(rates, dest_port_tcp, interval, dsmark_qdisc_id):
 	All packets of the connection will be first 
 	sent to an estimator named as the port
 	"""
-	ipt.send_to_estimator(est_name,"tcp", dest_port_tcp, interval)
-	#send_to_estimator(est_name,"udp", dest_port_udp, interval)
+	ipt.send_to_estimator(est_name, "tcp", dest_port_tcp, interval)
+	# send_to_estimator(est_name,"udp", dest_port_udp, interval)
 	"""
 	------------- <---4000
 	|			|
@@ -105,11 +104,9 @@ def iptables_meter_marker(rates, dest_port_tcp, interval, dsmark_qdisc_id):
 			ipt.classify_and_accept(est_name, "tcp", dest_port_tcp, dsmark_qdisc_id, dscp)
 
 
+def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen, 
+	g_rates, m_m_rates, marking, tech, num_bands, do_symm, e_f_rates):
 
-def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, 
-	queuelen, g_rates, m_m_rates, marking, 
-	tech, num_bands, do_symm, e_f_rates):
-	
 	tc.clean_interface(intf)		
 	ipt.flush_iptables()
 
@@ -130,12 +127,11 @@ def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit,
 	dsmark_qdisc_id = 1
 	if marking != NO_MARKERS:
 		tc.add_dsmark_qdisc(intf, "root", dsmark_qdisc_id, 64, num_bands)
-		for dscp in range(1,num_bands+1): # i=1-->8
+		for dscp in range(1, num_bands+1): # i=1-->8
 			tc.change_dsmark_class(intf, dsmark_qdisc_id, dscp, dscp)
 
 	# Set iptables and netem
 	for i in range(n_users):
-		
 		"""
 		user-specific IDs
 		"""
@@ -153,20 +149,19 @@ def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit,
 			"""
 			ipt.mark_port_based("tcp", dest_port_tcp, veth_id)
 
-
 		if marking != NO_MARKERS:
 			"""
 			Calculate user parameters
 			"""		
-			rates = ml.get_rates(g_rates[i], bn_cap, m_m_rates[i],num_bands, do_symm, e_f_rates[i])
+			rates = ml.get_rates(g_rates[i], bn_cap, m_m_rates[i], num_bands, do_symm, e_f_rates[i])
 			ml.print_rates(rates, bn_cap)
 			if marking == IPTABLES_MARKERS:
 				# put all measuring and classifying rules for the user
 				iptables_meter_marker(rates, dest_port_tcp, if_delay, dsmark_qdisc_id)
 			elif marking == BUCKETS_MARKERS:
-				#put filters for the interface
-				add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands, dest_port_tcp = dest_port_tcp)
-		
+				# put filters for the interface
+				add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands, dest_port_tcp=dest_port_tcp)
+
 		"""
 		qdiscs
 		"""
@@ -182,7 +177,7 @@ def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit,
 				tc.add_netem_qdisc(veth_intf, "root", netem_qdisc_id, vr_limit, if_delay, queuelen)
 			else:
 				if queuelen>0: # otherwise it creates a fifo of 1 packet!
-					tc.add_pfifo_qdisc(veth_intf,"root",netem_qdisc_id)
+					tc.add_pfifo_qdisc(veth_intf, "root", netem_qdisc_id)
 			"""
 			Alter the source IP of packets
 			"""

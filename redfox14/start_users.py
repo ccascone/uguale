@@ -1,6 +1,5 @@
 #!/usr/bin/python
-
-import sys, getopt, time, threading, os
+import sys, getopt, time
 import netem_and_marker as nm
 from mylib import *
 
@@ -17,18 +16,18 @@ def run_program(
 	killall("iperf") 
 	n_users = len(g_rates)
 
-	#------- obsolete params-----
+	# ------- obsolete params-----
 	intf = "eth0"
 	veth_queuelen = 0
 	tech = TECH_OVS
-	#----------------------------
+	# ----------------------------
 
 	# Apply meter and markers and netem on veths
 	nm.veth_netem_marker(
 		intf, bn_cap, fixed_rtts, vr_limit, 
 		veth_queuelen, g_rates, m_m_rates, marking, 
 		tech, num_bands, do_symm, e_f_rates)
-	
+
 	# Sleep until start_ts
 	sleep_time = start_ts - time.time() 
 	if sleep_time > 0:
@@ -41,10 +40,9 @@ def run_program(
 		num_conn = fixed_conns[user]
 		iperf_str = "iperf -c{} -P{} -t{} -p{}".format(SERVER_IP, num_conn, duration+5, dest_port)
 		launch_bg(iperf_str)
-	
+
 def main(argv):
 	start_ts = 0
-	
 	help_string = "TRANSMISSION:\n\
 	-d<duration> -t<starting timestamp>\n\
 	USERS CONFIGURATION:\n\
@@ -56,7 +54,7 @@ def main(argv):
 	-Q<num bands> -K<do_symm>"
 
 	try:
-		opts, args = getopt.getopt(argv,"hd:t:P:T:C:m:b:G:M:E:Q:K:")
+		opts, args = getopt.getopt(argv, "hd:t:P:T:C:m:b:G:M:E:Q:K:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
@@ -72,14 +70,13 @@ def main(argv):
 			start_ts = float(arg)
 
 		elif opt in ("-P"):
-			fixed_conns = map(int,arg.split(","))
+			fixed_conns = map(int, arg.split(","))
 		elif opt in ("-T"):
-			fixed_rtts = map(float,arg.split(","))
+			fixed_rtts = map(float, arg.split(","))
 		elif opt in ("-C"):
 			vr_limit = rate_to_int(arg)
 		elif opt in ("-m"):
 			marking = arg
-
 
 		elif opt in ("-b"):
 			bn_cap = rate_to_int(arg)
@@ -100,4 +97,4 @@ def main(argv):
 		bn_cap, g_rates, m_m_rates, e_f_rates, num_bands, do_symm)
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+	main(sys.argv[1:])

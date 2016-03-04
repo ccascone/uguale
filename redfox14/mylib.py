@@ -4,36 +4,36 @@ import numpy as np
 FNULL = open(os.devnull, "w")
 
 
-#--------------------- REFOX NETWORK IP ADDRESSES ------------------
+# --------------------- REFOX NETWORK IP ADDRESSES ------------------
 NETWORK_PREFIX = "192.168.200"
 NETWORK_PREFIX_16 = "192.168"
-HOST_IDS = [1,2,3]
-STARTING_IPS = [110,120,130] 
+HOST_IDS = [1, 2, 3]
+STARTING_IPS = [110, 120, 130] 
 SERVER_ID = 4
 SWITCH_ID = 98
 SERVER_IP = "{}.{}".format(NETWORK_PREFIX, SERVER_ID)
 SWITCH_IP = "{}.{}".format(NETWORK_PREFIX, SWITCH_ID)
 NUM_VETHS = 10
 
-# pc1 --->192.168.200.1 ---> [110,119]
-# pc2 --->192.168.200.2 ---> [120,129]
-# pc3 --->192.168.200.3 ---> [130,139]
+# pc1 --->192.168.200.1 ---> [110, 119]
+# pc2 --->192.168.200.2 ---> [120, 129]
+# pc3 --->192.168.200.3 ---> [130, 139]
 ADDRESSES = {}
 index_pc = 0
 for pc in HOST_IDS:
-	pc_ip = "{}.{}".format(NETWORK_PREFIX,pc)
+	pc_ip = "{}.{}".format(NETWORK_PREFIX, pc)
 	ADDRESSES[pc_ip] = []
 	for i in range(NUM_VETHS):
 		addr_id = STARTING_IPS[index_pc] + i
-		addr_str = "{}.{}".format(NETWORK_PREFIX,addr_id)
+		addr_str = "{}.{}".format(NETWORK_PREFIX, addr_id)
 		ADDRESSES[pc_ip].append(addr_str)
 	index_pc +=1
 
-#--------------------- MARKERS ------------------
-HZ 	= 250 	# [Hz] frequency of tokens update
+# --------------------- MARKERS ------------------
+HZ = 250 	# [Hz] frequency of tokens update
 MTU = 1500 	# [Byte] maximum transfer unit of the physical layer
 UDP_PACKET_SIZE = 1470 		# [Byte] packet size of UDP datagrams genererated by iperf
-MAX_PACKET_SIZE = 64*1024 	# [Byte] maximum packet size of TCP packets [at 1Gbps]
+MAX_PACKET_SIZE = 64 * 1024 	# [Byte] maximum packet size of TCP packets [at 1Gbps]
 RTT_NO_NETEM = 0.3 # rtt to be saved if netem is not used = real rtt
 
 NO_MARKERS = "no_markers"
@@ -45,7 +45,7 @@ MARKING_TYPES = [NO_MARKERS, BUCKETS_MARKERS, IPTABLES_MARKERS]
 TECH_OVS = "ovs"
 TECH_NONE = "none"
 
-#--------------------- TEST PARAMETERS ------------------
+# --------------------- TEST PARAMETERS ------------------
 FIRST_TCP_PORT = 5001
 FIRST_UDP_PORT = 5201
 STANDALONE = "standalone"
@@ -57,83 +57,83 @@ MAX_TRIES = 3 # max failed tries to declare a test/configuration failed
 SYNC_TIME = 10 # after this time from t0(server) users start iperf connections
 RESULTS_CSV_FILENAME = "results.csv"
 
-#--------------------- VALIDITY PARAMETERS ------------------
+# --------------------- VALIDITY PARAMETERS ------------------
 RECORD_BEGIN = 35 # seconds to discard at the begin
 RECORD_END = 3 # seconds to discard at the end
 BIRTH_TIMEOUT = 20 # every user must be born within this interval
 HIST_BINS = 500 # number of histogram
 
 
-#----------------- OTHER PARAMETERS ------------------
+# ----------------- OTHER PARAMETERS ------------------
 
 # Abbreviations to create pickle file names
 # [[full_name, abbr.]]
 INSTANCE_NAME_PARAMS = [
-	["cookie", 			"test"	],
-	["bn_cap", 			"cap"	],
-	["free_b",			"fb"	], 	
-	["n_users",			"u"		],
-	["range_rtts", 		"rtt"	],
-	["range_conns", 	"conn"	],
-	["duration", 		"d"		],
-	["repetition", 		"rep"	],
-	["num_bands",		"nb"	],
-	["guard_bands", 	"gb"	],
-	["markers", 		"mr"	],
-	["tech",			"tk"	],
-	["queuelen",		"q"	],
-	["switch_type",		"t"		],
-	["do_comp_rtt",		"crtt"	],
+	["cookie", 			"test"	], 
+	["bn_cap", 			"cap"	], 
+	["free_b", 			"fb"	], 	
+	["n_users", 			"u"		], 
+	["range_rtts", 		"rtt"	], 
+	["range_conns", 	"conn"	], 
+	["duration", 		"d"		], 
+	["repetition", 		"rep"	], 
+	["num_bands", 		"nb"	], 
+	["guard_bands", 	"gb"	], 
+	["markers", 		"mr"	], 
+	["tech", 			"tk"	], 
+	["queuelen", 		"q"	], 
+	["switch_type", 		"t"		], 
+	["do_comp_rtt", 		"crtt"	], 
 	["strength", 		"s"		]
 ]
 
-#----------------- CSV COLUMNS ------------------
+# ----------------- CSV COLUMNS ------------------
 
 # Columns for the CSV file about test confguration (full_names)
 PARAMS_COLUMNS = [
-	"start_ts", "cookie", "switch_type", "bn_cap", "free_b",
-	"vr_limit", "n_users","range_rtts", "range_conns",
-	"duration", "markers", "num_bands","do_comp_rtt",
-	"strength", "guard_bands",
+	"start_ts", "cookie", "switch_type", "bn_cap", "free_b", 
+	"vr_limit", "n_users", "range_rtts", "range_conns", 
+	"duration", "markers", "num_bands", "do_comp_rtt", 
+	"strength", "guard_bands", 
 	"queuelen", "tech"]
 
 # Columns for the CSV file about test statistics (full_names)
 STATS_COLUMNS = [
-	"jain_idx_mean","jain_idx_var", 
-	"thr_mean","thr_var",
-	"good_mean","good_var",
-	"ratio_gt_mean","ratio_gt_var",
-	"distr_mean", "distr_var","distr_std","distr_mse"]
+	"jain_idx_mean", "jain_idx_var", 
+	"thr_mean", "thr_var", 
+	"good_mean", "good_var", 
+	"ratio_gt_mean", "ratio_gt_var", 
+	"distr_mean", "distr_var", "distr_std", "distr_mse"]
 
 
-#----------------- PDF PARAMETERS ------------------
+# ----------------- PDF PARAMETERS ------------------
 # The parameters shown in the pdf must be a subsets of CSV names
 
 # subset of PARAMS_COLUMNS 
 PARAMS_BRIEF = [
-	"switch_type","markers","queuelen",
-	"free_b","num_bands","guard_bands","do_comp_rtt"
+	"switch_type", "markers", "queuelen", 
+	"free_b", "num_bands", "guard_bands", "do_comp_rtt"
 ]
 
 # Names of PARAMS_BRIEF to be printed
 PARAMS_BRIEF_SHOW = [
-	"Switch type","Marking type","Switch queue lenght",
-	"Unused capacity","N. of bands","N. of guard bands","RTT compensation"
+	"Switch type", "Marking type", "Switch queue lenght", 
+	"Unused capacity", "N. of bands", "N. of guard bands", "RTT compensation"
 ]
 
 # subset of STAT_COLUMNS
 STATS_BRIEF = [
-	"jain_idx_mean","jain_idx_var", 
-	"thr_mean","thr_var",
-	"good_mean","good_var",
-	"ratio_gt_mean","ratio_gt_var"
+	"jain_idx_mean", "jain_idx_var", 
+	"thr_mean", "thr_var", 
+	"good_mean", "good_var", 
+	"ratio_gt_mean", "ratio_gt_var"
 ]
 
 # Names of STATS_BRIEF to be printed
 STATS_BRIEF_SHOW = [
-	"Jain's Index mean", "Jain's Index var",
+	"Jain's Index mean", "Jain's Index var", 
 	"Throughput mean", "Throughput var", 
-	"Goodput mean", "Goodput var",
+	"Goodput mean", "Goodput var", 
 	"Ratio G/T mean", "Ratio G/T var"
 ]
 
@@ -141,7 +141,7 @@ def append_to_csv(params, stats):
 
 	rows_to_write = []
 	if not os.path.isfile(RESULTS_CSV_FILENAME):
-		rows_to_write.append(PARAMS_COLUMNS+STATS_COLUMNS)
+		rows_to_write.append(PARAMS_COLUMNS + STATS_COLUMNS)
 
 	rows_to_write.append([])
 	for key in PARAMS_COLUMNS:
@@ -158,13 +158,13 @@ def append_to_csv(params, stats):
 	if len(stats)>0:
 		rows_to_write[-1].extend([stats[c] for c in STATS_COLUMNS])
 	else:
-		rows_to_write[-1].extend([-1]*len(STATS_COLUMNS))
+		rows_to_write[-1].extend([-1] * len(STATS_COLUMNS))
 
-	with open(RESULTS_CSV_FILENAME,"a") as f:
+	with open(RESULTS_CSV_FILENAME, "a") as f:
 		for row in rows_to_write:
-			f.write(";".join(map(str, row))+"\n")
+			f.write(";".join(map(str, row)) + "\n")
 
-#------------------------ PRINTING/CONVERSIONS -------------------------#
+# ------------------------ PRINTING/CONVERSIONS -------------------------#
 
 """
 Conversion es. "45.5m"--> 45500000
@@ -175,17 +175,17 @@ def rate_to_int(rate_str):
 	try:
 		return int(float(rate_str))
 	except ValueError:
-		regex_rate = re.compile("([0-9]{1,20}.[0-9]{1,20})([m,g,k]{0,1})")
+		regex_rate = re.compile("([0-9]{1, 20}.[0-9]{1, 20})([m, g, k]{0, 1})")
 		m = regex_rate.match(rate_str)
 		num = float(m.groups()[0])
 		mult = m.groups()[1]
 
 		if mult=="k":
-			return int(num*10**3)
+			return int(num * 10**3)
 		if mult=="m":
-			return int(num*10**6)
+			return int(num * 10**6)
 		if mult=="g":
-			return int(num*10**9)
+			return int(num * 10**9)
 
 """
 Conversion es. 1000-->1.0k
@@ -194,10 +194,10 @@ def num_to_rate(rate_int):
 	if rate_int<10**3:
 		return str(rate_int)
 	if rate_int<10**6:
-		return str(rate_int/10.0**3)+"k"
+		return str(rate_int / 10.0**3) + "k"
 	if rate_int<10**9:
-		return str(rate_int/10.0**6)+"m"
-	return str(rate_int/10.0**9)+"g"
+		return str(rate_int / 10.0**6) + "m"
+	return str(rate_int / 10.0**9) + "g"
 
 """
 Conversion es. 1000-->1k
@@ -206,25 +206,25 @@ def num_to_rate_int(rate_int):
 	if rate_int<10**3:
 		return str(int(rate_int))
 	if rate_int<10**6:
-		return str(int(rate_int/10**3))+"k"
+		return str(int(rate_int / 10**3)) + "k"
 	if rate_int<10**9:
-		return str(int(rate_int/10**6))+"m"
-	return str(int(rate_int/10**9))+"g"
+		return str(int(rate_int / 10**6)) + "m"
+	return str(int(rate_int / 10**9)) + "g"
 
 """
 Insert a timestamp and a return.
 """
-def my_log(text,t0=0):
-	print "{}: {}\r".format(time.time()-t0,text)
+def my_log(text, t0=0):
+	print "{}: {}\r".format(time.time() - t0, text)
 
 
-#------------------------ EXECUTION OF EXTERNAL PROGRAMS -------------------------#
+# ------------------------ EXECUTION OF EXTERNAL PROGRAMS -------------------------#
 
 """
 Executes a programm (command string) and returns output lines
 """
 def runPexpect(exe):
-	child = pexpect.spawn(exe, timeout = None)
+	child = pexpect.spawn(exe, timeout=None)
 	for line in child:
 		yield line
 
@@ -234,7 +234,7 @@ Executes a command in background (no output!)
 def launch_bg(command, do_print=False):
 	if do_print:
 		print command
-	return subprocess.Popen(command.split(),stdout=FNULL)
+	return subprocess.Popen(command.split(), stdout=FNULL)
 
 
 """
@@ -246,7 +246,7 @@ def cmd(command):
 def sudo_cmd(command):
 	subprocess.call("sudo {}".format(command), shell=True) 
 
-def cmd_ssh_xterm(pc_ip,command):
+def cmd_ssh_xterm(pc_ip, command):
 	cmd_str = "(xterm -hold -e \"ssh {} '{}'\") & ".format(pc_ip, command)
 	cmd(cmd_str)
 	print cmd_str
@@ -279,10 +279,10 @@ def killall(process_name, arg=None):
 		grep_str = "{}.*{}".format(process_name, arg)
 	else:
 		grep_str = str(process_name)
-	cmd_str = "for pid in $(ps -ef | grep \""+grep_str+"\" | awk '{print $2}'); do sudo kill -9 $pid; done"
+	cmd_str = "for pid in $(ps -ef | grep \"" + grep_str + "\" | awk '{print $2}'); do sudo kill -9 $pid; done"
 	cmd(cmd_str)
 
-#------------------------ OTHER UTILITIES -------------------------#
+# ------------------------ OTHER UTILITIES -------------------------#
 
 """
 Appenzeller:
@@ -311,7 +311,7 @@ def reset_hosts():
 		cmd_ssh_bg(host, str_ssh)
 
 def reset_switch():
-	cmd_ssh_bg(SWITCH_IP,"sudo sh reset_redfox0.sh")
+	cmd_ssh_bg(SWITCH_IP, "sudo sh reset_redfox0.sh")
 	time.sleep(2)
 
 
@@ -320,8 +320,8 @@ def get_instance_name(configuration):
 	for key in INSTANCE_NAME_PARAMS:
 		param = key[0]
 		short_name = key[1]
-		value = str(configuration[param]).replace(" ","") 
-		instance_name += ("{}{}_".format(short_name,value))
+		value = str(configuration[param]).replace(" ", "") 
+		instance_name += ("{}{}_".format(short_name, value))
 	instance_name = instance_name[:-1]
 	return instance_name
 
@@ -330,16 +330,16 @@ def set_queuelen(intf, length):
 	sudo_cmd("ifconfig {} txqueuelen {}".format(intf, int(length)))	
 
 def my_bool(val):
-	if val in ["True","true",True,1]:
+	if val in ["True", "true", True, 1]:
 		return True
 	return False
 
 def cast_value(value):
-	if isinstance(value,list) or isinstance(value,tuple):
+	if isinstance(value, list) or isinstance(value, tuple):
 		# i'm a list
 		return [cast_value(v) for v in value]
 	elif isinstance(value, dict):
-		return {key:cast_value(value[key]) for key in value}
+		return {key: cast_value(value[key]) for key in value}
 	else:
 		# i'm a scalar
 		value = str(value)
@@ -347,9 +347,9 @@ def cast_value(value):
 			return int(value)
 		except ValueError:
 			try:
-				return round(float(value),3)
+				return round(float(value), 3)
 			except ValueError:
-				regex_float_rate = re.compile("([0-9]{1,20}.[0-9]{1,20})([m,g,k]{0,1})")
+				regex_float_rate = re.compile("([0-9]{1, 20}.[0-9]{1, 20})([m, g, k]{0, 1})")
 				m = regex_float_rate.match(value)
 				if m:
 					return "{:.3f}{}".format(float(m.groups()[0]), m.groups()[1])

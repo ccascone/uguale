@@ -26,21 +26,21 @@ def test_is_valid(test):
 		return False
 
 	if (len(data)-1)<params["n_users"]:
-		print "ERROR: Expected {} active users, found {}".format(params["n_users"],len(data)-1 ) 
+		print "ERROR: Expected {} active users, found {}".format(params["n_users"], len(data)-1) 
 		flag = False
 
-	expected_reports =  float(params["duration"] - RECORD_BEGIN - RECORD_END)/IPERF_REPORT_INTERVAL
+	expected_reports = float(params["duration"] - RECORD_BEGIN - RECORD_END)/IPERF_REPORT_INTERVAL
 	max_noshow_reports = float(max_noshow_seconds) / IPERF_REPORT_INTERVAL
 
 	for src in data:
 		if src!="SUM":
 			if data[src]["tcp"]["t"][0]>BIRTH_TIMEOUT:
-				print "ERROR: {} born after birth timeout ({}s)".format(src,data[src]["tcp"]["t"][0])
+				print "ERROR: {} born after birth timeout ({}s)".format(src, data[src]["tcp"]["t"][0])
 				flag = False
 
 			if data[src]["tcp"]["t"][-1]<params["duration"]-RECORD_END:
-				print "ERROR: {} died prematurely ({}s)".format(src,data[src]["tcp"]["t"][-1])
-				flag =  False
+				print "ERROR: {} died prematurely ({}s)".format(src, data[src]["tcp"]["t"][-1])
+				flag = False
 
 			sampleslen = len((trim_samples(data[src]["tcp"], params['duration']))[1])
 			if math.fabs(sampleslen - expected_reports) > max_noshow_seconds:
@@ -55,7 +55,7 @@ def test_is_valid(test):
 					src, small_samples, min_val)
 				flag = False
 
-	## TODO: check that the amount of 0 samples is less then a quota
+	# TODO: check that the amount of 0 samples is less then a quota
 
 	return flag
 
@@ -82,13 +82,13 @@ def trim_samples(samples, duration):
 			break
 	last = i-1
 
-	return [samples["t"][first:last],samples["val"][first:last]]
+	return [samples["t"][first:last], samples["val"][first:last]]
 
 
 def get_jain_index(thrs, efrs):
-	x = map(lambda i : float(i[0])/i[1], zip(thrs, efrs))
+	x = map(lambda i: float(i[0])/i[1], zip(thrs, efrs))
 	num = (np.sum(x))**2
-	den = len(thrs)*np.sum(map(lambda y:y**2,x))
+	den = len(thrs)*np.sum(map(lambda y: y**2, x))
 	return float(num)/den
 
 
@@ -102,28 +102,26 @@ def get_stats(test):
 	joint_vals = []
 	data = test["data"]
 	params = test["params"]
-	#free_b = params["free_b"]
-	#rate_to_int(params["g_rates"][i])
-	
+	# free_b = params["free_b"]
+	# rate_to_int(params["g_rates"][i])
+
 	efrs = map(rate_to_int, params["e_f_rates"])
-	C = rate_to_int(params["bn_cap"])
 	link_c = rate_to_int(params["vr_limit"])
 	duration = test["params"]["duration"]
-	
+
 	means = []
 	stds = []
 	ips=[]
 	ids=[]
 	jain_idxs = []
 
-
 	"""
 	Extract data from dict and trim it
 	Find the minimum lenght array
 	"""
 	i=0
-	t_ini = 0# the biggest first timestamp
-	t_end = sys.maxint	 #the smallest last timestamp
+	t_ini = 0 # the biggest first timestamp
+	t_end = sys.maxint	 # the smallest last timestamp
 
 	for src in sorted(data):
 		if src == "SUM":
@@ -132,8 +130,8 @@ def get_stats(test):
 		t_ts.append(trimmed_ts)
 		t_vals.append(trimmed_vals)		
 
-		t_ini = max(math.ceil(trimmed_ts[0]),t_ini)
-		t_end = min(math.floor(trimmed_ts[-1]),t_end)
+		t_ini = max(math.ceil(trimmed_ts[0]), t_ini)
+		t_end = min(math.floor(trimmed_ts[-1]), t_end)
 
 		ips.append(src)
 		ids.append(i)
@@ -144,7 +142,6 @@ def get_stats(test):
 		t_ini, 
 		t_end, 
 		int(t_end-t_ini)*IPERF_REPORT_INTERVAL)# min, max, n_samples
-
 
 	# t_vals cointains trimmed data["tcp"]["val"] ordered by ids
 	for i in range(len(t_vals)):	
@@ -166,7 +163,7 @@ def get_stats(test):
 		"""
 		resample the signal to obtain syncronized samples
 		"""
-		f = interpolate.interp1d(t_ts[i],t_vals[i]) # interpolation function
+		f = interpolate.interp1d(t_ts[i], t_vals[i]) # interpolation function
 
 		"""
 		resample directly at each IPERF_REPORT_INTERVAL
@@ -175,13 +172,11 @@ def get_stats(test):
 		# print len(r_v)
 		resampled_vals.append(r_v)
 
-	
 	total_goodput = []
 	for t in range(len(resampled_ts)):
 		rates_t = [resampled_vals[i][t] for i in range(len(resampled_vals))]  # rates in a certain t
-		jain_idxs.append(get_jain_index(rates_t,efrs))
+		jain_idxs.append(get_jain_index(rates_t, efrs))
 		total_goodput.append(np.sum(rates_t))
-
 
 	jain_idx_mean = np.mean(jain_idxs)
 	jain_idx_var = np.var(jain_idxs)
@@ -208,11 +203,11 @@ def get_stats(test):
 	Ratio goodput/throughput
 	The throughput must be resampled in the same instants of the goodput 
 	"""
-	
-	f = interpolate.interp1d(bwm_ng["t"],bwm_ng["val"])
+
+	f = interpolate.interp1d(bwm_ng["t"], bwm_ng["val"])
 	resampled_throughput = f(resampled_ts)
 
-	ratio_gt = [ float(total_goodput[i]) / resampled_throughput[i] for i in range(len(total_goodput))]
+	ratio_gt = [float(total_goodput[i]) / resampled_throughput[i] for i in range(len(total_goodput))]
 	ratio_gt_mean = np.mean(ratio_gt)
 	ratio_gt_var = np.var(ratio_gt) 
 
@@ -223,7 +218,6 @@ def get_stats(test):
 	distr_std = np.std(joint_vals)
 	distr_var = np.var(joint_vals)
 	distr_mse = np.mean(map(np.square, joint_vals))
-
 
 	"""
 	Aggregate users with the same RTT and do stats
@@ -249,7 +243,6 @@ def get_stats(test):
 		same_rtts[rtt]["mean"] = np.mean(same_rtts[rtt]["vals"])
 		same_rtts[rtt]["std"] = np.std(same_rtts[rtt]["vals"])
 
-
 	"""
 	Aggregate users with the same n of conns and do stats
 	"""
@@ -266,29 +259,28 @@ def get_stats(test):
 		same_conns[conn]["mean"] = np.mean(same_conns[conn]["vals"])
 		same_conns[conn]["std"] = np.std(same_conns[conn]["vals"])
 
-
 	"""
 	save all stat in a dict
 	"""
 	stat={
-		"joint_vals"		: joint_vals,
-		"jain_idx_mean"		: jain_idx_mean,
-		"jain_idx_var"		: jain_idx_var,
-		"thr_mean"			: thr_mean,
-		"thr_var"			: thr_var,
-		"good_mean"			: good_mean,
-		"good_var"			: good_var,
-		"ratio_gt_mean"		: ratio_gt_mean,
-		"ratio_gt_var"		: ratio_gt_var,
-		"distr_mean"		: distr_mean,
-		"distr_var"			: distr_var,
-		"distr_std"			: distr_std,
-		"distr_mse"			: distr_mse,
+		"joint_vals"		: joint_vals, 
+		"jain_idx_mean"		: jain_idx_mean, 
+		"jain_idx_var"		: jain_idx_var, 
+		"thr_mean"			: thr_mean, 
+		"thr_var"			: thr_var, 
+		"good_mean"			: good_mean, 
+		"good_var"			: good_var, 
+		"ratio_gt_mean"		: ratio_gt_mean, 
+		"ratio_gt_var"		: ratio_gt_var, 
+		"distr_mean"		: distr_mean, 
+		"distr_var"			: distr_var, 
+		"distr_std"			: distr_std, 
+		"distr_mse"			: distr_mse, 
 		"means"				: means, 
 		"stds"				: stds, 
-		"ips"				: ips,
-		"ids"				: ids,
-		"same_rtts"			: same_rtts,
+		"ips"				: ips, 
+		"ids"				: ids, 
+		"same_rtts"			: same_rtts, 
 		"same_conns"		: same_conns
 	}
 
@@ -310,10 +302,10 @@ def get_text(params, stat, brief=False):
 	for i in range(len(users)):
 		if ("netem" in params and not params["netem"]):
 			text += "User {}: {}c, {}ms\n".format(
-				users[i],int(params["fixed_conns"][i]),RTT_NO_NETEM)
+				users[i], int(params["fixed_conns"][i]), RTT_NO_NETEM)
 		else:	
 			text += "User {}: {}c, {}ms\n".format(
-				users[i],int(params["fixed_conns"][i]),int(params["fixed_rtts"][i]))
+				users[i], int(params["fixed_conns"][i]), int(params["fixed_rtts"][i]))
 
 	# parameters
 	if brief:
@@ -322,8 +314,6 @@ def get_text(params, stat, brief=False):
 	else:
 		params_to_show = params.keys()
 		params_to_show2 = params.keys()
-
-
 
 	text += "\nCONFIGURATION\n"	
 	i = 0
@@ -357,8 +347,8 @@ def get_text(params, stat, brief=False):
 				value = False
 
 			param2 = params_to_show2[i]
-			if (isinstance(value,list) or isinstance(value,tuple)) and len(value)>2 and len(set(value))==1:
-				text += "{}: [{}]*{}{}".format(param2, value[0],len(value),separator)
+			if (isinstance(value, list) or isinstance(value, tuple)) and len(value)>2 and len(set(value))==1:
+				text += "{}: [{}]*{}{}".format(param2, value[0], len(value), separator)
 			else:
 				unity = ""
 				if param in ["queuelen"]:
@@ -388,31 +378,31 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 
 	new_params = cast_value(params)
 
-	text = get_text(new_params,stat, brief=True)
+	text = get_text(new_params, stat, brief=True)
 
 	subplots = {
-		"distr" : {
-			"position"	: 221,
-			"title"		: "(a)",
-			"xlabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity",
+		"distr": {
+			"position"	: 221, 
+			"title"		: "(a)", 
+			"xlabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity", 
 			"ylabel"	: "Discrete distribution"
-		},
-		"gen" : {
-			"position"	: 222,
-			"title"		: "(b)",
-			"xlabel"	: "User ID",
+		}, 
+		"gen": {
+			"position"	: 222, 
+			"title"		: "(b)", 
+			"xlabel"	: "User ID", 
 			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
-		},
-		"rtts" : {
-			"position"	: 223,
-			"title"		: "(c)",
-			"xlabel"	: "RTT [ms]",
+		}, 
+		"rtts": {
+			"position"	: 223, 
+			"title"		: "(c)", 
+			"xlabel"	: "RTT [ms]", 
 			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
-		},
-		"conns" : {
-			"position"	: 224,
-			"title"		: "(d)",
-			"xlabel"	: "Number of TCP connections",
+		}, 
+		"conns": {
+			"position"	: 224, 
+			"title"		: "(d)", 
+			"xlabel"	: "Number of TCP connections", 
 			"ylabel"	: ""
 		}
 	}
@@ -422,11 +412,11 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	hor_border = 0.10 # as % of 1 that is the total figure size
 	ver_border = 0.05
 	end_plots = 0.8 # We must leave space for the legend
-	y_lims = [-0.10,+0.10] # values in plots
-	x_lims = [-0.15,+0.15] # used for histograms	
+	y_lims = [-0.10, +0.10] # values in plots
+	x_lims = [-0.15, +0.15] # used for histograms	
 
 	ax = {} # subplots
-	fig = plt.figure(1, figsize=(width,height))
+	fig = plt.figure(1, figsize=(width, height))
 	for key in subplots:
 		ax[key] = fig.add_subplot(subplots[key]["position"])
 		ax[key].set_ylabel(subplots[key]["ylabel"])
@@ -440,21 +430,19 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	# |
 	# ------+ x
 
-	fig.subplots_adjust(left=hor_border*0.5,bottom=ver_border,right=end_plots,top=1-(ver_border*0.66))
-
+	fig.subplots_adjust(left=hor_border*0.5, bottom=ver_border, right=end_plots, top=1-(ver_border*0.66))
 
 	users = map(lambda x: x+1, stat["ids"])
 	fixed_rtts = test["params"]["fixed_rtts"]
 	fixed_conns = test["params"]["fixed_conns"]
 	mean_rate = stat["distr_mean"]
 
-
-	#----------------------------- GENERAL ----------------------------------------
+	# ----------------------------- GENERAL ----------------------------------------
 
 	x_min = 0
 	x_max = max(users)+1
 
-	ax["gen"].set_xlim([x_min,x_max])
+	ax["gen"].set_xlim([x_min, x_max])
 	ax["gen"].xaxis.set_ticks(sorted(users))	
 	ax["gen"].set_ylim(y_lims)	
 	ax["gen"].errorbar(users, stat["means"], stat["stds"], linestyle="None", 
@@ -462,27 +450,27 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	ax["gen"].legend()
 	ax["gen"].axhline(linewidth=1, color="black")       
 
-	#----------------------------- DISTRIBUTION + HISTOGRAM----------------------------------------
+	# ----------------------------- DISTRIBUTION + HISTOGRAM----------------------------------------
 
-	n, bins, rectangles  = P.hist( stat["joint_vals"], 
-			bins = np.linspace(-1,+1, HIST_BINS), 
-			normed = True, 
-			edgecolor = 'black',
-			facecolor = 'black',
-			antialiased = True,
-			alpha = 1
-			)
+	n, bins, rectangles = P.hist(
+		stat["joint_vals"], 
+		bins=np.linspace(-1, +1, HIST_BINS), 
+		normed=True, 
+		edgecolor='black', 
+		facecolor='black', 
+		antialiased=True, 
+		alpha=1)
 
 	max_y = max(n)*1.10
-	ax["distr"].plot([mean_rate,mean_rate],[0,max_y], color="red", label="Mean", linewidth=1.5)
+	ax["distr"].plot([mean_rate, mean_rate], [0, max_y], color="red", label="Mean", linewidth=1.5)
 	ax["distr"].legend()
 	ax["distr"].set_xlim(x_lims)	
-	ax["distr"].set_ylim([0,max_y])	
+	ax["distr"].set_ylim([0, max_y])	
 
 	stat_text = ""
-	key2 = ["Mean","Var","Std","MSE"]
+	key2 = ["Mean", "Var", "Std", "MSE"]
 	i=0
-	for key in ["distr_mean","distr_var","distr_std","distr_mse"]:
+	for key in ["distr_mean", "distr_var", "distr_std", "distr_mse"]:
 		val = stat[key]
 		stat_text+= "{}: ".format(key2[i])
 		if float(val)==val and val<10:
@@ -492,14 +480,13 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 		stat_text+= "\n"
 		i+=1
 
-	ax["distr"].text(x_lims[0]+0.01,max_y*0.97, stat_text, ha="left", va="top")
+	ax["distr"].text(x_lims[0]+0.01, max_y*0.97, stat_text, ha="left", va="top")
 
-	#----------------------------- RTTS ----------------------------------------
-
+	# ----------------------------- RTTS ----------------------------------------
 
 	same_rtts = stat["same_rtts"]
 	means_same_rtts = []
-	dev_same_rtts  = []
+	dev_same_rtts = []
 	for rtt in sorted(same_rtts):
 		means_same_rtts.append(same_rtts[rtt]["mean"])
 		dev_same_rtts.append(same_rtts[rtt]["std"])
@@ -509,10 +496,10 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	if len(same_rtts)>1:
 		keys = sorted(same_rtts.keys())
 		delta = keys[1]-keys[0]
-		x_min = max(0,keys[0]-delta)
+		x_min = max(0, keys[0]-delta)
 		x_max = keys[-1]+delta
-	
-	ax["rtts"].set_xlim([x_min,x_max])	
+
+	ax["rtts"].set_xlim([x_min, x_max])	
 
 	"""
 	If there are many RTT, the x-axis has no space to display all labels
@@ -530,43 +517,43 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 		linestyle="None", marker="o", color="black", label="Mean/std")
 	ax["rtts"].legend()
 	ax["rtts"].axhline(linewidth=1, color="black")       
-	
-	#----------------------------- CONNS ----------------------------------------
-	x_min = max(0,min(fixed_conns)-1)
+
+	# ----------------------------- CONNS ----------------------------------------
+	x_min = max(0, min(fixed_conns)-1)
 	x_max = max(fixed_conns)+1
 
 	same_conns = stat["same_conns"]
 	means_same_conns = []
-	dev_same_conns  = []
+	dev_same_conns = []
 	for conn in sorted(same_conns):
 		means_same_conns.append(same_conns[conn]["mean"])
 		dev_same_conns.append(same_conns[conn]["std"])
 
-	ax["conns"].set_xlim([x_min,x_max])	
+	ax["conns"].set_xlim([x_min, x_max])	
 	ax["conns"].xaxis.set_ticks(sorted(same_conns))
 	ax["conns"].set_ylim(y_lims)
 	ax["conns"].errorbar(sorted(same_conns), means_same_conns, dev_same_conns, 
 		linestyle="None", marker="o", color="black", label="Mean/std")
 	ax["conns"].legend()
 	ax["conns"].axhline(linewidth=1, color="black")        
-	#----------------------------- TEXTS ----------------------------------------
+	# ----------------------------- TEXTS ----------------------------------------
 
-	plt.figtext(end_plots+(0.33*hor_border), 1-(0.66*ver_border)-0.01,  text, va = 'top' , ha = 'left', bbox = {'facecolor':'white', 'pad':20})
+	plt.figtext(end_plots+(0.33*hor_border), 1-(0.66*ver_border)-0.01, 
+		text, va='top', ha='left', bbox={'facecolor': 'white', 'pad': 20})
 
-	#----------------------------- SAVE ----------------------------------------
-
+	# ----------------------------- SAVE ----------------------------------------
 
 	"""
 	filename
 	"""
 	if do_save:
 		quality = "Q{}".format(int(stat["distr_mse"]*10**8))
-		timestamp = str(params["start_ts"]).replace(".","_")
+		timestamp = str(params["start_ts"]).replace(".", "_")
 
-		fig_filename="{}/{}_{}_{}.png".format(new_folders[0],quality,instance_name,timestamp)
+		fig_filename="{}/{}_{}_{}.png".format(new_folders[0], quality, instance_name, timestamp)
 		plt.savefig(fig_filename, format="PNG")
-		
-		pdf_filename="{}/{}.pdf".format(new_folders[1],timestamp)
+
+		pdf_filename="{}/{}.pdf".format(new_folders[1], timestamp)
 		plt.savefig(pdf_filename, format="PDF")
 
 	else:	
@@ -586,8 +573,8 @@ def plot_single_file(instance_name, pickle_name, folder, do_save):
 	for n_f in new_folders:
 		if do_save and not os.path.exists(n_f):
 			os.makedirs(n_f)
-	
-	test = pickle.load(open("{}/{}".format(folder,pickle_name),"rb"))
+
+	test = pickle.load(open("{}/{}".format(folder, pickle_name), "rb"))
 
 	if not test_is_valid(test):
 		print "ERROR: invalid test! Skipping..."
@@ -609,8 +596,8 @@ def plot_all_files(folder, do_save):
 			instance_name = file_name[:-2]
 			print "Processing {}...".format(instance_name)
 
-			test = pickle.load(open("{}/{}".format(folder,file_name),"rb"))
-			ts = (str(test["params"]["start_ts"])).replace(".","_")
+			test = pickle.load(open("{}/{}".format(folder, file_name), "rb"))
+			ts = (str(test["params"]["start_ts"])).replace(".", "_")
 			skip = False
 
 			for pdf_name in os.listdir(new_folders[1]):
@@ -621,21 +608,21 @@ def plot_all_files(folder, do_save):
 
 			if not skip:
 				plot_single_file(
-					instance_name=instance_name,
-					pickle_name=file_name,
-					folder=folder,
+					instance_name=instance_name, 
+					pickle_name=file_name, 
+					folder=folder, 
 					do_save=do_save)
 
 
 def main(argv):
-	folder =  "/"
+	folder = "/"
 	do_save = False
 	help_string = "Usage: -f <folder> -s <do-save>\n\
 	foder: absolute path or starting from where the program is executed\n\
 	do-save: 1 to save file, 0 to show only"
 
 	try:
-		opts, args = getopt.getopt(argv,"hf:s:")
+		opts, args = getopt.getopt(argv, "hf:s:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
@@ -652,7 +639,7 @@ def main(argv):
 	if do_save_int==1:
 		do_save=True
 
-	plot_all_files(folder,do_save)
+	plot_all_files(folder, do_save)
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+	main(sys.argv[1:])
