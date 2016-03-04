@@ -2,73 +2,18 @@ import os, re, pexpect, subprocess, math, time
 import numpy as np
 
 FNULL = open(os.devnull, "w")
+
+
+#--------------------- REFOX NETWORK IP ADDRESSES ------------------
 NETWORK_PREFIX = "192.168.200"
 NETWORK_PREFIX_16 = "192.168"
-
-"""
-TO UPDATE IN COUPLE!
-"""
-HOST_IDS = [1,3]
-STARTING_IPS = [110,130] 
-
+HOST_IDS = [1,2,3]
+STARTING_IPS = [110,120,130] 
 SERVER_ID = 4
 SWITCH_ID = 98
 SERVER_IP = "{}.{}".format(NETWORK_PREFIX, SERVER_ID)
 SWITCH_IP = "{}.{}".format(NETWORK_PREFIX, SWITCH_ID)
-# debug = False
-FIRST_TCP_PORT = 5001
-FIRST_UDP_PORT = 5201
 NUM_VETHS = 10
-HZ 	= 250 	# [Hz] frequency of tokens update
-MTU = 1500 	# [Byte] maximum transfer unit of the physical layer
-UDP_PACKET_SIZE = 1470 		# [Byte] packet size of UDP datagrams genererated by iperf
-MAX_PACKET_SIZE = 64*1024 	# [Byte] maximum packet size of TCP packets [at 1Gbps]
-
-NO_MARKERS = "no_markers"
-BUCKETS_MARKERS = "buckets_markers"
-IPTABLES_MARKERS = "iptables_markers"
-PYTHON_MARKERS = "python_markers"
-
-TECH_OVS = "ovs"
-TECH_BR = "br"
-TECH_VLANS = "vlans"
-TECH_NONE = "none"
-
-IPERF_REPORT_INTERVAL = 1 
-DURATION = 180 # duration of tests
-MAX_TRIES = 3 # max failed tries to declare a test/configuration failed
-
-STARTING_IP = 110 # first emulated host is .110
-RTT_NO_NETEM = 0.3 # rtt to be saved if netem is not used
-
-STANDALONE = "standalone"
-UGUALE = "uguale"
-
-RESULTS_CSV_FILENAME = "results.csv"
-
-RECORD_BEGIN 	= 35 # seconds to discard at the begin
-RECORD_END 		= 3*IPERF_REPORT_INTERVAL # seconds to discard at the end
-BIRTH_TIMEOUT = 20 # every user must be born within this interval
-HIST_BINS = 500 # width of histogram steps
-DISTR_BINS = HIST_BINS*10 # width of distribution steps
-REF_MEAN = 0 # the reference distribution has zero mean
-REF_STD_DEV = 0.001 # the reference distribution has a low standard deviation
-
-SYNC_TIME = 10
-
-
-PARAMS_COLUMNS = [
-	"start_ts", "cookie", "switch_type", "bn_cap", "free_b",
-	"vr_limit", "n_users","range_rtts", "range_conns",
-	"duration", "marking", "bands","comp_rtt","strength","guard_bands",
-	"queuelen", "queuelen_switch", "tech"]
-
-STATS_COLUMNS = [
-	"jain_idx_mean","jain_idx_var", 
-	"ratio_gt_mean","ratio_gt_var",
-	"global_mean", "global_var","global_std","global_percentile", "global_abs_mean", 
-	"distr_corr","samples_per_user"]
-
 
 # pc1 --->192.168.200.1 ---> [110,119]
 # pc2 --->192.168.200.2 ---> [120,129]
@@ -83,6 +28,141 @@ for pc in HOST_IDS:
 		addr_str = "{}.{}".format(NETWORK_PREFIX,addr_id)
 		ADDRESSES[pc_ip].append(addr_str)
 	index_pc +=1
+
+#--------------------- MARKERS ------------------
+HZ 	= 250 	# [Hz] frequency of tokens update
+MTU = 1500 	# [Byte] maximum transfer unit of the physical layer
+UDP_PACKET_SIZE = 1470 		# [Byte] packet size of UDP datagrams genererated by iperf
+MAX_PACKET_SIZE = 64*1024 	# [Byte] maximum packet size of TCP packets [at 1Gbps]
+RTT_NO_NETEM = 0.3 # rtt to be saved if netem is not used = real rtt
+
+NO_MARKERS = "no_markers"
+BUCKETS_MARKERS = "buckets_markers"
+IPTABLES_MARKERS = "iptables_markers"
+
+MARKING_TYPES = [NO_MARKERS, BUCKETS_MARKERS, IPTABLES_MARKERS]
+
+TECH_OVS = "ovs"
+TECH_NONE = "none"
+
+#--------------------- TEST PARAMETERS ------------------
+FIRST_TCP_PORT = 5001
+FIRST_UDP_PORT = 5201
+STANDALONE = "standalone"
+UGUALE = "uguale"
+SWITCH_TYPES = [STANDALONE, UGUALE]
+IPERF_REPORT_INTERVAL = 1 
+DURATION = 180 # duration of tests
+MAX_TRIES = 3 # max failed tries to declare a test/configuration failed
+SYNC_TIME = 10 # after this time from t0(server) users start iperf connections
+RESULTS_CSV_FILENAME = "results.csv"
+
+#--------------------- VALIDITY PARAMETERS ------------------
+RECORD_BEGIN = 35 # seconds to discard at the begin
+RECORD_END = 3 # seconds to discard at the end
+BIRTH_TIMEOUT = 20 # every user must be born within this interval
+HIST_BINS = 500 # number of histogram
+
+
+#----------------- OTHER PARAMETERS ------------------
+
+# Abbreviations to create pickle file names
+# [[full_name, abbr.]]
+INSTANCE_NAME_PARAMS = [
+	["cookie", 			"test"	],
+	["bn_cap", 			"cap"	],
+	["free_b",			"fb"	], 	
+	["n_users",			"u"		],
+	["range_rtts", 		"rtt"	],
+	["range_conns", 	"conn"	],
+	["duration", 		"d"		],
+	["repetition", 		"rep"	],
+	["num_bands",		"nb"	],
+	["guard_bands", 	"gb"	],
+	["markers", 		"mr"	],
+	["tech",			"tk"	],
+	["queuelen",		"q"	],
+	["switch_type",		"t"		],
+	["do_comp_rtt",		"crtt"	],
+	["strength", 		"s"		]
+]
+
+#----------------- CSV COLUMNS ------------------
+
+# Columns for the CSV file about test confguration (full_names)
+PARAMS_COLUMNS = [
+	"start_ts", "cookie", "switch_type", "bn_cap", "free_b",
+	"vr_limit", "n_users","range_rtts", "range_conns",
+	"duration", "markers", "num_bands","do_comp_rtt",
+	"strength", "guard_bands",
+	"queuelen", "tech"]
+
+# Columns for the CSV file about test statistics (full_names)
+STATS_COLUMNS = [
+	"jain_idx_mean","jain_idx_var", 
+	"thr_mean","thr_var",
+	"good_mean","good_var",
+	"ratio_gt_mean","ratio_gt_var",
+	"distr_mean", "distr_var","distr_std","distr_mse"]
+
+
+#----------------- PDF PARAMETERS ------------------
+# The parameters shown in the pdf must be a subsets of CSV names
+
+# subset of PARAMS_COLUMNS 
+PARAMS_BRIEF = [
+	"switch_type","markers","queuelen",
+	"free_b","num_bands","guard_bands","do_comp_rtt"
+]
+
+# Names of PARAMS_BRIEF to be printed
+PARAMS_BRIEF_SHOW = [
+	"Switch type","Marking type","Switch queue lenght",
+	"Unused capacity","N. of bands","N. of guard bands","RTT compensation"
+]
+
+# subset of STAT_COLUMNS
+STATS_BRIEF = [
+	"jain_idx_mean","jain_idx_var", 
+	"thr_mean","thr_var",
+	"good_mean","good_var",
+	"ratio_gt_mean","ratio_gt_var"
+]
+
+# Names of STATS_BRIEF to be printed
+STATS_BRIEF_SHOW = [
+	"Jain's Index mean", "Jain's Index var",
+	"Throughput mean", "Throughput var", 
+	"Goodput mean", "Goodput var",
+	"Ratio G/T mean", "Ratio G/T var"
+]
+
+def append_to_csv(params, stats):
+
+	rows_to_write = []
+	if not os.path.isfile(RESULTS_CSV_FILENAME):
+		rows_to_write.append(PARAMS_COLUMNS+STATS_COLUMNS)
+
+	rows_to_write.append([])
+	for key in PARAMS_COLUMNS:
+		if key in params:
+			value = str(params[key])
+		elif key not in params and key == "num_bands":
+			value = 8 
+		elif key not in params and key == "strength":
+			value = 1 
+		else:
+			value = "unknown"
+		rows_to_write[-1].append(value)
+
+	if len(stats)>0:
+		rows_to_write[-1].extend([stats[c] for c in STATS_COLUMNS])
+	else:
+		rows_to_write[-1].extend([-1]*len(STATS_COLUMNS))
+
+	with open(RESULTS_CSV_FILENAME,"a") as f:
+		for row in rows_to_write:
+			f.write(";".join(map(str, row))+"\n")
 
 #------------------------ PRINTING/CONVERSIONS -------------------------#
 
@@ -166,25 +246,10 @@ def cmd(command):
 def sudo_cmd(command):
 	subprocess.call("sudo {}".format(command), shell=True) 
 
-"""
-Open a new terminal (xterm) and execute an ssh commands from it
-"""
-# def cmd_ssh(pc_ip,command):
-# 	cmd_str = "(xterm -hold -e \"ssh {} '{}'\") & ".format(pc_ip, command)
-# 	cmd(cmd_str)
-# 	print cmd_str
-
-# def cmd_ssh(pc_ip,command):
-# 	cmd_str = "ssh {} '{}' &".format(pc_ip, command)
-# 	cmd(cmd_str)
-# 	print cmd_str
-
-
-
-# def cmd_ssh2(pc_ip,command):
-# 	cmd_str = "ssh {} '{}' &".format(pc_ip, command)
-# 	cmd(cmd_str)
-# 	print cmd_str
+def cmd_ssh_xterm(pc_ip,command):
+	cmd_str = "(xterm -hold -e \"ssh {} '{}'\") & ".format(pc_ip, command)
+	cmd(cmd_str)
+	print cmd_str
 
 def cmd_ssh(host, remoteCmd):
 	# localCmd = "/usr/bin/ssh", host, "<<", "EOF\n{}\nEOF".format(remoteCmd)
@@ -198,16 +263,12 @@ def cmd_ssh(host, remoteCmd):
 		print "*** Error with SSH command {}: {}".format(localCmd, result)
 	return result
 
-
 def cmd_ssh_bg(host, remoteCmd):
 	# localCmd = "/usr/bin/ssh", host, "<<", "EOF\n{}\nEOF".format(remoteCmd)
 	localCmd = "/usr/bin/ssh", host, remoteCmd
 	print "*** Executing SSH command in BG: {}".format(localCmd)
 	subprocess.Popen(
 			localCmd, stdout=FNULL, stderr=FNULL, shell=False)
-
-
-#------------------------ OTHER UTILITIES -------------------------#
 
 """ 
 Effectivelly kill all process with given name 
@@ -221,6 +282,7 @@ def killall(process_name, arg=None):
 	cmd_str = "for pid in $(ps -ef | grep \""+grep_str+"\" | awk '{print $2}'); do sudo kill -9 $pid; done"
 	cmd(cmd_str)
 
+#------------------------ OTHER UTILITIES -------------------------#
 
 """
 Appenzeller:
@@ -237,29 +299,12 @@ def optimal_queue_len(rtts, conns, C):
 
 def limit_interface(limit, intf):
 	if limit=="100.0m":
-		sudo_cmd("ethtool -s {} advertise 0x008 autoneg on speed 100 duplex full".format(intf))
+		sudo_cmd("ethtool -s {} advertise 0x008 autoneg on \
+			speed 100 duplex full".format(intf))
 	else:
-		sudo_cmd("ethtool -s {} advertise 0x020 autoneg on speed 1000 duplex full".format(intf))
+		sudo_cmd("ethtool -s {} advertise 0x020 autoneg on \
+			speed 1000 duplex full".format(intf))
 
-def update_hosts_code():
-	for host in ADDRESSES:
-		cmd("scp *.py redfox@{}:~".format(host))	
-		cmd("scp *.sh redfox@{}:~".format(host))	
-
-"""
-The script called prepare the PCs to emulate many users
-with the passed technology
-"""
-def set_up_hosts(tech):
-	for host in sorted(ADDRESSES):
-		str_ssh = "python set_up_host.py -s{} -t{}".format(host,tech)
-		cmd_ssh(host, str_ssh)
-
-"""
-This code must be mantained on a separate script
-because we will temporary lose connection with the PC.
-It simply delete OVS on the pc
-"""
 def reset_hosts():
 	for host in sorted(ADDRESSES):
 		str_ssh = "sudo sh /redfox-automations/all/reset_net_conf"
@@ -270,33 +315,9 @@ def reset_switch():
 	time.sleep(2)
 
 
-def reboot_redfox14():
-	cmd_ssh_bg(SWITCH_IP,"sudo sh /redfox-automations/redfox0/reboot_redfox14")
-	time.sleep(2)
-
-
 def get_instance_name(configuration):
-	params_filename = [
-		["cookie", 			"test"	],
-		["bn_cap", 			"cap"	],
-		["free_b",			"fb"	], 	
-		["users_p_h", 		"uph"	],
-		["range_rtts", 		"rtt"	],
-		["range_conns", 	"conn"	],
-		["duration", 		"dur"	],
-		["repetition", 		"rep"	],
-		["bands",			"b"		],
-		["guard_bands", 	"gb"	],
-		["marking", 		"mr"	],
-		["tech",			"tc"	],
-		["queuelen",		"q"		],
-		["queuelen_switch",	"qsw"	],
-		["switch_type",		"t"		],
-		["comp_rtt",		"crtt"	],
-		["strength", 		"s"],
-	]
 	instance_name = ""
-	for key in params_filename:
+	for key in INSTANCE_NAME_PARAMS:
 		param = key[0]
 		short_name = key[1]
 		value = str(configuration[param]).replace(" ","") 

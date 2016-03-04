@@ -1,24 +1,17 @@
 #!/usr/bin/python
-import pickle, os, sys, getopt
-import numpy as np
-import math
-import matplotlib.mlab as mlab
+import pickle, os, sys, getopt, math
 import matplotlib.pyplot as plt
-from mylib import *
-from scipy import stats
+import numpy as np
 import pylab as P
 from scipy import interpolate
-# from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, VPacker
-
-RESAMPLING_FREQUENCY = 10 
+from mylib import *
 
 def get_normalized_vals(vals, expected_fair_rate, C):	
 	# return map(lambda x: ((x - expected_fair_rate)/expected_fair_rate)**2, vals)
 	return map(lambda x: (x - expected_fair_rate)/float(C), vals)
 
 def test_is_valid(test):
-
-	# all must birth within a timeout
+	# all users must arise within a timeout
 	data = test["data"]
 	params = test["params"]
 
@@ -68,8 +61,10 @@ def test_is_valid(test):
 
 def trim_samples(samples, duration):
 	"""
-		Discard samples outside the RECORD_BEGIN-RECORD_END interval (specific to the duration).
-		Takes all samples right after the RECORD_BEGIN instant, and al lsamples right before the RECORD_END instant.
+	Discard samples outside the RECORD_BEGIN-RECORD_END interval 
+	(specific to the duration).
+	Takes all samples right after the RECORD_BEGIN instant, 
+	and al lsamples right before the RECORD_END instant.
 	"""
 	first = 0
 	for i in range(len(samples["t"])):
@@ -112,14 +107,13 @@ def get_stats(test):
 	
 	efrs = map(rate_to_int, params["e_f_rates"])
 	C = rate_to_int(params["bn_cap"])
+	link_c = rate_to_int(params["vr_limit"])
 	duration = test["params"]["duration"]
 	
 	means = []
 	stds = []
-	percentiles = []
 	ips=[]
 	ids=[]
-
 	jain_idxs = []
 
 
@@ -130,7 +124,6 @@ def get_stats(test):
 	i=0
 	t_ini = 0# the biggest first timestamp
 	t_end = sys.maxint	 #the smallest last timestamp
-	min_length = sys.maxint # min number of samples per user
 
 	for src in sorted(data):
 		if src == "SUM":
@@ -141,20 +134,10 @@ def get_stats(test):
 
 		t_ini = max(math.ceil(trimmed_ts[0]),t_ini)
 		t_end = min(math.floor(trimmed_ts[-1]),t_end)
-		min_length = min(min_length, len(trimmed_ts))
 
 		ips.append(src)
 		ids.append(i)
 		i+=1
-
-
-	# high frequency resampling
-	# hf_vals = []
-	# hf_ts = np.linspace(
-	# 	t_ini, 
-	# 	t_end, 
-	# 	int(t_end-t_ini)*IPERF_REPORT_INTERVAL*RESAMPLING_FREQUENCY)# min, max, n_samples
-
 
 	resampled_vals = []
 	resampled_ts = np.linspace(
@@ -165,7 +148,7 @@ def get_stats(test):
 
 	# t_vals cointains trimmed data["tcp"]["val"] ordered by ids
 	for i in range(len(t_vals)):	
-		vals = get_normalized_vals(t_vals[i], efrs[i], C)
+		vals = get_normalized_vals(t_vals[i], efrs[i], link_c)
 		normalized_vals.append(vals)
 		"""
 		to calculate the distribution of samples
@@ -185,17 +168,8 @@ def get_stats(test):
 		"""
 		f = interpolate.interp1d(t_ts[i],t_vals[i]) # interpolation function
 
-		# """
-		# method 1: value is the average on each IPERF_REPORT_INTERVAL of the high frequency resampled signal
-		# """
-		# hf_v = f(hf_ts) # high frequency signal
-		# r_v = [np.mean(hf_v[j:j+RESAMPLING_FREQUENCY]) for j in range(0,len(hf_v),RESAMPLING_FREQUENCY)] 
-		# print len(hf_v), len(r_v)
-		# hf_vals.append(hf_v)
-		# resampled_vals.append(r_v)
-
 		"""
-		method 2: resample directly at each IPERF_REPORT_INTERVAL
+		resample directly at each IPERF_REPORT_INTERVAL
 		"""
 		r_v = f(resampled_ts)
 		# print len(r_v)
@@ -213,45 +187,42 @@ def get_stats(test):
 	jain_idx_var = np.var(jain_idxs)
 
 	"""
-	Ratio goodput/throughput
+	Throughput
 	"""
 	bwm_ng= data["SUM"]["total"]
-	f = interpolate.interp1d(bwm_ng["t"],bwm_ng["val"])
-	total_throughput = f(resampled_ts)
 
-	ratio_gt = [ float(total_goodput[i]) / total_throughput[i] for i in range(len(total_goodput))]
+	trimmed_ts_bwm, trimmed_vals_bwm = trim_samples(bwm_ng, duration)
+
+	normalized_throughput = map(lambda x: x/float(link_c), trimmed_vals_bwm)
+	thr_mean = np.mean(normalized_throughput)
+	thr_var = np.var(normalized_throughput)
+
+	"""
+	Goodput
+	"""
+	normalized_goodput = map(lambda x: x/float(link_c), total_goodput)
+	good_mean = np.mean(normalized_goodput)
+	good_var = np.var(normalized_goodput)
+
+	"""
+	Ratio goodput/throughput
+	The throughput must be resampled in the same instants of the goodput 
+	"""
+	
+	f = interpolate.interp1d(bwm_ng["t"],bwm_ng["val"])
+	resampled_throughput = f(resampled_ts)
+
+	ratio_gt = [ float(total_goodput[i]) / resampled_throughput[i] for i in range(len(total_goodput))]
 	ratio_gt_mean = np.mean(ratio_gt)
 	ratio_gt_var = np.var(ratio_gt) 
 
 	"""
 	Stats on aggregated normalized samples
 	"""	
-	global_percentile = np.percentile(map(math.fabs, joint_vals), 90)
-	global_mean = np.mean(joint_vals)
-	global_std = np.std(joint_vals)
-	global_var = np.var(joint_vals)
-	global_abs_mean = np.mean(np.fabs(joint_vals))
-
-	"""
-	Measured distribution
-	"""
-	density = stats.kde.gaussian_kde(joint_vals) #,20*step
-	x = np.linspace(-1,1,DISTR_BINS)
-	measured_distr = density(x)
-	# the frequency must be normalized
-	# e.g if I have 10 samples on 1000 in an interval,
-	# I want the value for that interval to be 1% = 0.01 instead of 10
-	# so we can compare test with different users--> total samples
-	# measured_distr = map(lambda x: x/len(joint_vals), measured_distr)
-
-	# new_x=np.arange(-1,+1+STEP/10,STEP/10)
-	# smooth_distr = spline(stat["x_for_distribution"],measured_distr,new_x)
-
-	"""
-	Reference distribution
-	"""
-	ref_distr = mlab.normpdf(x,REF_MEAN,REF_STD_DEV)
-	corr = np.correlate(ref_distr,measured_distr)[0]
+	distr_mean = np.mean(joint_vals)
+	distr_std = np.std(joint_vals)
+	distr_var = np.var(joint_vals)
+	distr_mse = np.mean(map(np.square, joint_vals))
 
 
 	"""
@@ -303,23 +274,22 @@ def get_stats(test):
 		"joint_vals"		: joint_vals,
 		"jain_idx_mean"		: jain_idx_mean,
 		"jain_idx_var"		: jain_idx_var,
+		"thr_mean"			: thr_mean,
+		"thr_var"			: thr_var,
+		"good_mean"			: good_mean,
+		"good_var"			: good_var,
 		"ratio_gt_mean"		: ratio_gt_mean,
 		"ratio_gt_var"		: ratio_gt_var,
-		"global_mean"		: global_mean,
-		"global_var"		: global_var,
-		"global_std"		: global_std,
-		"global_percentile"	: global_percentile,
-		"global_abs_mean"	: global_abs_mean,
-		"measured_distr"	: measured_distr,
+		"distr_mean"		: distr_mean,
+		"distr_var"			: distr_var,
+		"distr_std"			: distr_std,
+		"distr_mse"			: distr_mse,
 		"means"				: means, 
 		"stds"				: stds, 
-		"percentiles"		: percentiles,
 		"ips"				: ips,
 		"ids"				: ids,
 		"same_rtts"			: same_rtts,
-		"same_conns"		: same_conns,
-		"samples_per_user"	: min_length,
-		"distr_corr" 		: corr 
+		"same_conns"		: same_conns
 	}
 
 	return stat
@@ -328,9 +298,9 @@ def get_stats(test):
 Create the desctiption text
 starting from test parameters and stats
 """
-def get_text(params, stat):
-	text_width = 45
+def get_text(params, stat, brief=False):
 	import textwrap as tw
+	text_width = 45	
 	separator = "\n"
 	text = ""
 
@@ -339,32 +309,78 @@ def get_text(params, stat):
 	text += "USERS\n"
 	for i in range(len(users)):
 		if ("netem" in params and not params["netem"]):
-			text += "User {}: {}c, {}ms\n".format(users[i],int(params["fixed_conns"][i]),RTT_NO_NETEM)
+			text += "User {}: {}c, {}ms\n".format(
+				users[i],int(params["fixed_conns"][i]),RTT_NO_NETEM)
 		else:	
-			text += "User {}: {}c, {}ms\n".format(users[i],int(params["fixed_conns"][i]),int(params["fixed_rtts"][i]))
+			text += "User {}: {}c, {}ms\n".format(
+				users[i],int(params["fixed_conns"][i]),int(params["fixed_rtts"][i]))
 
 	# parameters
-	text += "\nCONFIGURATION\n"
-	for param in params:
+	if brief:
+		params_to_show = PARAMS_BRIEF
+		params_to_show2 = PARAMS_BRIEF_SHOW
+	else:
+		params_to_show = params.keys()
+		params_to_show2 = params.keys()
+
+
+
+	text += "\nCONFIGURATION\n"	
+	i = 0
+	for param in params_to_show:
 		if param != "fixed_conns" and param != "fixed_rtts":
-			value = params[param]
-			if (isinstance(value,list) or isinstance(value,tuple)) and len(value)>2 and len(set(value))==1:
-				text += "{} : [{}]*{}{}".format(param, value[0],len(value),separator)
+
+			if param not in params:
+				value == "unknown"
 			else:
-				text += separator.join(tw.wrap("{} : {}".format(param, value), text_width)) + separator
+				value = params[param]
+
+			"""
+			Adjust parameter
+			"""
+			if params["switch_type"] == STANDALONE:
+				if param == "markers":
+					value = NO_MARKERS
+				elif param == "guard_bands":
+					value = -1
+				elif param == "do_comp_rtt":
+					value = False
+				elif param == "free_b":
+					value = 0.0
+				elif param == "num_bands":
+					value == 1
+
+			if params["switch_type"] == UGUALE and param not in params and param == "num_bands":
+				value = 8
+
+			if param == "do_comp_rtt" and len(set(params["fixed_rtts"]))==1:
+				value = False
+
+			param2 = params_to_show2[i]
+			if (isinstance(value,list) or isinstance(value,tuple)) and len(value)>2 and len(set(value))==1:
+				text += "{}: [{}]*{}{}".format(param2, value[0],len(value),separator)
+			else:
+				unity = ""
+				if param in ["queuelen"]:
+					unity = "pkt"
+
+				text += separator.join(tw.wrap("{}: {} {}".format(param2, value, unity), text_width)) + separator
+		i+=1
 
 	# statistics
 	text += "\nSTATISTICS\n"
-	for key in STATS_COLUMNS:
+	i=0
+	for key in STATS_BRIEF:
 		val = stat[key]
-		text+= "{} : ".format(key)
+		text+= "{}: ".format(STATS_BRIEF_SHOW[i])
 		if float(val)==val and val<10:
 			text += "{0:.7f}".format(val)
 		else:
 			text += "{}".format(int(val))	
-		text+= separator		
-		
-	return text
+		text+= separator
+		i+=1
+
+	return text[:-1]
 
 
 def plot_file(test, stat, instance_name, new_folders, do_save):
@@ -372,39 +388,42 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 
 	new_params = cast_value(params)
 
-	text = get_text(new_params,stat)
+	text = get_text(new_params,stat, brief=True)
 
 	subplots = {
-		"gen" : {
-			"position"	: 222,
-			"title"		: "Users",
-			"xlabel"	: "User ID",
-			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
-			
-		},
 		"distr" : {
 			"position"	: 221,
-			"title"		: "Distribution of rates",
+			"title"		: "(a)",
 			"xlabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity",
-			"ylabel"	: "Normalized count"
+			"ylabel"	: "Discrete distribution"
+		},
+		"gen" : {
+			"position"	: 222,
+			"title"		: "(b)",
+			"xlabel"	: "User ID",
+			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
 		},
 		"rtts" : {
 			"position"	: 223,
-			"title"		: "Rate dependence from the Round Trip Time",
-			"xlabel"	: "RTT",
+			"title"		: "(c)",
+			"xlabel"	: "RTT [ms]",
 			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
 		},
 		"conns" : {
 			"position"	: 224,
-			"title"		: "Rate dependence from the number of TCP connections",
+			"title"		: "(d)",
 			"xlabel"	: "Number of TCP connections",
-			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
+			"ylabel"	: ""
 		}
 	}
 
-	height = 16
-	width = int(height*(16/9.0))
-	
+	height = 11
+	width = height * 1.7
+	hor_border = 0.10 # as % of 1 that is the total figure size
+	ver_border = 0.05
+	end_plots = 0.8 # We must leave space for the legend
+	y_lims = [-0.10,+0.10] # values in plots
+	x_lims = [-0.15,+0.15] # used for histograms	
 
 	ax = {} # subplots
 	fig = plt.figure(1, figsize=(width,height))
@@ -420,24 +439,15 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	# |
 	# |
 	# ------+ x
-	border = 0.045 # as % of 1 that is the total figure size
 
-	# # text may be long
-	# if len(params["m_m_rates"])>2 and len(set(params["m_m_rates"]))>1:
-	# 	end_plots = 0.7 - border # We must leave space for the legend
-	# else:
-	# 	end_plots = 0.85 - border # We must leave space for the legend
-
-	end_plots = 0.85 - border # We must leave space for the legend
-
-	fig.subplots_adjust(left=border,bottom=border,right=end_plots,top=1-border)
+	fig.subplots_adjust(left=hor_border*0.5,bottom=ver_border,right=end_plots,top=1-(ver_border*0.66))
 
 
 	users = map(lambda x: x+1, stat["ids"])
 	fixed_rtts = test["params"]["fixed_rtts"]
 	fixed_conns = test["params"]["fixed_conns"]
-	mean_rate = stat["global_mean"]
-	y_lims = [-0.15,+0.15] # values in plots
+	mean_rate = stat["distr_mean"]
+
 
 	#----------------------------- GENERAL ----------------------------------------
 
@@ -447,10 +457,10 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	ax["gen"].set_xlim([x_min,x_max])
 	ax["gen"].xaxis.set_ticks(sorted(users))	
 	ax["gen"].set_ylim(y_lims)	
-	ax["gen"].errorbar(users, stat["means"], stat["stds"], linestyle="None", marker="o", color="black")
-	ax["gen"].plot([x_min,x_max],[mean_rate,mean_rate], linestyle="--", color="red", label="Measured mean")
+	ax["gen"].errorbar(users, stat["means"], stat["stds"], linestyle="None", 
+		marker="o", color="black", label="Mean/std")
 	ax["gen"].legend()
-
+	ax["gen"].axhline(linewidth=1, color="black")       
 
 	#----------------------------- DISTRIBUTION + HISTOGRAM----------------------------------------
 
@@ -458,42 +468,31 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 			bins = np.linspace(-1,+1, HIST_BINS), 
 			normed = True, 
 			edgecolor = 'black',
-			facecolor = 'grey',
+			facecolor = 'black',
 			antialiased = True,
-			alpha = 0.3
+			alpha = 1
 			)
 
-	ax["distr"].plot(np.linspace(-1,+1, DISTR_BINS), stat["measured_distr"], 
-			label="Estimated PDF",
-			color = 'black',
-			linewidth = 1.5,
-			antialiased = True
-			)
-
-	max_y = max(max(stat["measured_distr"]),max(n))*1.10
-	ax["distr"].plot([mean_rate,mean_rate],[0,max_y], linestyle="--", color="red", label="Measured mean")
-
-	ax["distr"].legend()	
-	ax["distr"].set_xlim([-0.25,+0.25])	
+	max_y = max(n)*1.10
+	ax["distr"].plot([mean_rate,mean_rate],[0,max_y], color="red", label="Mean", linewidth=1.5)
+	ax["distr"].legend()
+	ax["distr"].set_xlim(x_lims)	
 	ax["distr"].set_ylim([0,max_y])	
 
-	# ref_distr = mlab.normpdf(stat["x_for_distribution"],REF_MEAN,REF_STD_DEV)
+	stat_text = ""
+	key2 = ["Mean","Var","Std","MSE"]
+	i=0
+	for key in ["distr_mean","distr_var","distr_std","distr_mse"]:
+		val = stat[key]
+		stat_text+= "{}: ".format(key2[i])
+		if float(val)==val and val<10:
+			stat_text += "{0:.7f}".format(val)
+		else:
+			stat_text += "{}".format(int(val))	
+		stat_text+= "\n"
+		i+=1
 
-	# ax["distr"].plot(stat["x_for_distribution"], ref_distr,  
-	# 		label="Reference distribution",
-	# 		color = 'red',
-	# 		linewidth = 1,
-	# 		antialiased = True,
-	# 		linestyle = "--"
-	# 		)
-
-	# normed means that the area sums to 1
-	# but we want to normalize such that the max height is 1 = 100% of samples in that interval
-	# for item in rectangles:
-	# 	item.set_height(item.get_height()/len(stat["joint_vals"]))
-
-	# ax["distr"].set_ylim([0,max(stat["measured_distr"])*1.2])	
-
+	ax["distr"].text(x_lims[0]+0.01,max_y*0.97, stat_text, ha="left", va="top")
 
 	#----------------------------- RTTS ----------------------------------------
 
@@ -514,11 +513,23 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 		x_max = keys[-1]+delta
 	
 	ax["rtts"].set_xlim([x_min,x_max])	
-	ax["rtts"].xaxis.set_ticks(sorted(same_rtts))
+
+	"""
+	If there are many RTT, the x-axis has no space to display all labels
+	"""
+	if len(same_rtts)>18:
+		"""
+		Alternate from the first. If it is even, it won't be nice :-(
+		"""
+		ax["rtts"].xaxis.set_ticks(sorted(same_rtts)[::2])		
+	else:
+		ax["rtts"].xaxis.set_ticks(sorted(same_rtts))
+
 	ax["rtts"].set_ylim(y_lims)
-	ax["rtts"].errorbar(sorted(same_rtts), means_same_rtts, dev_same_rtts, linestyle="None", marker="o", color="black")
-	ax["rtts"].plot([x_min,x_max],[mean_rate,mean_rate], linestyle="--", color="red", label="Measured mean")
+	ax["rtts"].errorbar(sorted(same_rtts), means_same_rtts, dev_same_rtts, 
+		linestyle="None", marker="o", color="black", label="Mean/std")
 	ax["rtts"].legend()
+	ax["rtts"].axhline(linewidth=1, color="black")       
 	
 	#----------------------------- CONNS ----------------------------------------
 	x_min = max(0,min(fixed_conns)-1)
@@ -534,15 +545,13 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	ax["conns"].set_xlim([x_min,x_max])	
 	ax["conns"].xaxis.set_ticks(sorted(same_conns))
 	ax["conns"].set_ylim(y_lims)
-	ax["conns"].errorbar(sorted(same_conns), means_same_conns, dev_same_conns, linestyle="None", marker="o", color="black")
-	ax["conns"].plot([x_min,x_max],[mean_rate,mean_rate], linestyle="--", color="red", label="Measured mean")
+	ax["conns"].errorbar(sorted(same_conns), means_same_conns, dev_same_conns, 
+		linestyle="None", marker="o", color="black", label="Mean/std")
 	ax["conns"].legend()
-
+	ax["conns"].axhline(linewidth=1, color="black")        
 	#----------------------------- TEXTS ----------------------------------------
 
-	plt.figtext(end_plots+(border/2), 1-border-0.01,  text, va = 'top' , ha = 'left', bbox = {'facecolor':'white', 'pad':20})
-	# p = patches.Rectangle((1.02,0),0.3,0.3)
-	# fig.set_patch(p)
+	plt.figtext(end_plots+(0.33*hor_border), 1-(0.66*ver_border)-0.01,  text, va = 'top' , ha = 'left', bbox = {'facecolor':'white', 'pad':20})
 
 	#----------------------------- SAVE ----------------------------------------
 
@@ -551,15 +560,14 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	filename
 	"""
 	if do_save:
-		quality = "Q{}".format(int(stat["global_abs_mean"]*10**6))
-		fig_filename="{}/{}_{}.png".format(new_folders[0],quality,instance_name)
-		plt.savefig(fig_filename, format="PNG")
-
+		quality = "Q{}".format(int(stat["distr_mse"]*10**8))
 		timestamp = str(params["start_ts"]).replace(".","_")
+
+		fig_filename="{}/{}_{}_{}.png".format(new_folders[0],quality,instance_name,timestamp)
+		plt.savefig(fig_filename, format="PNG")
+		
 		pdf_filename="{}/{}.pdf".format(new_folders[1],timestamp)
 		plt.savefig(pdf_filename, format="PDF")
-
-		print quality, timestamp
 
 	else:	
 		plt.show(block=True)
@@ -578,38 +586,39 @@ def plot_single_file(instance_name, pickle_name, folder, do_save):
 	for n_f in new_folders:
 		if do_save and not os.path.exists(n_f):
 			os.makedirs(n_f)
-
-	print "Processing {}...".format(instance_name)
+	
 	test = pickle.load(open("{}/{}".format(folder,pickle_name),"rb"))
+
 	if not test_is_valid(test):
 		print "ERROR: invalid test! Skipping..."
 		return
 
-	# """
-	# If all users have the same rtts, 
-	# the compensate-rtts has no meaning
-	# """
-	# if len(set(params["fixed_rtts"]))==1 and params["comp_rtt"]:
-	# 	print "Useless test"
-	# 	return
-
-	if test["params"]["marking"] == BUCKETS_MARKERS:
-		print "Token bucket, skipping"
-		return
 	stat = get_stats(test)
 	plot_file(test, stat, instance_name, new_folders, do_save)
 
 
 def plot_all_files(folder, do_save):
 
+	new_folders = ["./{}/fig/".format(folder), "./pdf_results/"]
+	for n_f in new_folders:
+		if do_save and not os.path.exists(n_f):
+			os.makedirs(n_f)
+
 	for file_name in os.listdir("./{}/".format(folder)):
 		if file_name[-2:] == ".p":
 			instance_name = file_name[:-2]
+			print "Processing {}...".format(instance_name)
+
+			test = pickle.load(open("{}/{}".format(folder,file_name),"rb"))
+			ts = (str(test["params"]["start_ts"])).replace(".","_")
 			skip = False
-			# for image_name in os.listdir(folder):
-				# if image_name.find(instance_name)!=-1:
-				# 	skip=True
-				# 	break
+
+			for pdf_name in os.listdir(new_folders[1]):
+				if pdf_name.find(ts)!=-1:
+					skip=True
+					print "Existing pdf!"
+					break
+
 			if not skip:
 				plot_single_file(
 					instance_name=instance_name,

@@ -11,7 +11,7 @@ import re
 from mylib import *
 
 """
-This program plot the colors of packet received by some hosts.
+This program plot the bands of packet received by some hosts.
 """
 sem_data 	= threading.Semaphore(1) # semaphore for operations on data
 stop 		= threading.Event()	# event to stop threads

@@ -4,7 +4,7 @@ This library contains functions that executes tc calls
 """
 
 # delete qdiscs from intf
-def clean_interface_tc(intf):
+def clean_interface(intf):
 	sudo_cmd("tc qdisc del dev {} root".format(intf))
 
 # prinnt qdisc class and filters of a intf

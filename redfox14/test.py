@@ -1,103 +1,65 @@
 #!/usr/bin/python
+import time, threading, os, pickle, random, sys, getopt, datetime
 import plot_server as ps
 import numpy as np
-from mylib import *
-from marking_lib import *
-import time, threading, os, pickle, random, sys, getopt, datetime
+import marking_lib as ml
 import view_result as vr
+from mylib import *
 
-
-def append_to_csv(params, stats):
-
-	rows_to_write = []
-	if not os.path.isfile(RESULTS_CSV_FILENAME):
-		rows_to_write.append(PARAMS_COLUMNS+STATS_COLUMNS)
-
-	rows_to_write.append([])
-	for key in PARAMS_COLUMNS:
-		if key in params:
-			value = params[key]
-		elif key not in params and key == "bands":
-			value = 8 
-		elif key not in params and key == "strength":
-			value = 1 
-		else:
-			value = "unknown"
-		rows_to_write[-1].append(value)
-
-	if len(stats)>0:
-		rows_to_write[-1].extend([stats[c] for c in STATS_COLUMNS])
-	else:
-		rows_to_write[-1].extend([-1]*len(STATS_COLUMNS))
-
-	with open(RESULTS_CSV_FILENAME,"a") as f:
-		for row in rows_to_write:
-			f.write(";".join(map(str, row))+"\n")
 
 
 """
 Pass parameters to hosts
 """
 def clients_thread(params):
-	time.sleep(2)
-	"""
-	Extract data from params
-	"""
+	time.sleep(1) # Let the server start 
 	g_rates = list(params["g_rates"])
 	fixed_rtts = list(params["fixed_rtts"])
 	fixed_conns = list(params["fixed_conns"])
 	m_m_rates = list(params["m_m_rates"])
 	e_f_rates = list(params["e_f_rates"])
 
-	"""
-	Example:
-	host_idxs = [1,2,3]
-	fixed_rtts = [1,2,3,4,5,6,7,8,9]
-	              ----- ----- -----
-	                h1    h2   h3	
-	"""
+	host_index = 0
 	for host in sorted(ADDRESSES):
 		fixed_rtts_host = []
 		fixed_conns_host = []	
 		g_rates_host = []	
 		m_m_rates_host = []
 		e_f_rates_host = []
-		for i in range(params["users_p_h"]):
+		for i in range(list(params["list_users"])[host_index]):
 			fixed_rtts_host.append(fixed_rtts.pop(0))
 			fixed_conns_host.append(fixed_conns.pop(0))	
 			g_rates_host.append(g_rates.pop(0))
 			m_m_rates_host.append(m_m_rates.pop(0))
 			e_f_rates_host.append(e_f_rates.pop(0))
 
-		str_ssh = "python start_users.py -s{} -g{} -C{} -P{} -l{} -f{} -d{} -m{} -M{} -q{} -t{} -S{} -Q{} -K{} -E{}".format(
-			host, 
-			",".join(g_rates_host), # ---> from here we obtain users per host
-			params["bn_cap"], #-C
-			",".join(map(str, fixed_conns_host)), #-P
-			params["vr_limit"], #-l
-			",".join(map(str,fixed_rtts_host)), #-f
-			params["duration"],#-d
-			params["marking"], #-m
-			",".join(m_m_rates_host), #-M
-			params["queuelen"], #-q
-			params["tech"], #-t
-			params["start_ts"],#-S
-			params["bands"], #-Q
-			params["symmetric"], #-K
-			",".join(e_f_rates_host)) #-E 
+		str_ssh = "python start_users.py -d{} -t{} \
+		-P{} -T{} -C{} -m{} \
+		-b{} -G{} -M{} -E{} -Q{} -K{}".format(
+			params["duration"],	params["start_ts"],
 
-		print str_ssh
+			",".join(map(str, fixed_conns_host)),
+			",".join(map(str,fixed_rtts_host)),
+			params["vr_limit"], params["markers"],
+
+			params["bn_cap"],
+			",".join(g_rates_host),
+			",".join(m_m_rates_host),
+			",".join(e_f_rates_host),
+			params["num_bands"], params["do_symm"])
 
 		cmd_ssh_bg(host, str_ssh)	
+		host_index += 1
 
-		print "Called {}".format(host)
+def start_test(
+		folder, cookie, do_save, do_visualize,
+		range_conns, list_conns, range_rtts, list_rtts, list_users,
+		vr_limit, list_markers,
+		list_queuelen, switch_type,
+		list_num_bands, list_guard_bands, bn_cap, 
+		list_free_b, list_do_comp_rtt, do_symm):
 
 
-
-def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts, 
-	list_conns, bn_cap, vr_limit, users_phs, free_bs, repetitions, various_guaranteed, 
-	queuelens, gbs, comp_rtts, visualizations, queuelens_switch, switch_types, 
-	markers,colors, symmetrics):
 
 	#------------------------------------ RESET THE NETWORK --------------------------------
 	killall("iperf")
@@ -105,252 +67,204 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 	killall("bwm-ng")	
 	reset_switch()
 	reset_hosts()
-	update_hosts_code()
-
-	#------------------------------------ TECHNOLOGY SETTINGS --------------------------------
-	"""
-	How to emulate many users
-	ovs: veths linked with ovs to eth0
-	br: same as before, but with linux bridge
-	vlans: veths used by vlans
-	none: no veth are created
-	"""
-	tech= TECH_OVS
+	for host in ADDRESSES:
+		cmd("scp *.py redfox@{}:~".format(host))	
+		cmd("scp *.sh redfox@{}:~".format(host))
+	
+	strength = 0.15
+	repetitions = 1
+	n_users = sum(list_users)
+	tech = TECH_OVS
 
 	#------------------------------------ PREPARE TEST CONFIGURATIONS --------------------------------
-
-	"""
-	We can have two modalities for both rtt and conns:
-	- rtt and conns will vary in a range : in each instance users will have values distributed in the range
-	- rtt and conns will be fixed : in each instance every user will have the same value (baselines)
-	This setting is automatic and based on the LISTS passed
-	"""
-	if len(list_rtts)==0:
-		list_rtts=[0]
-		keep_same_rtts = False
-	else:
-		keep_same_rtts = True
-
-	if len(list_conns)==0:
-		list_conns=[0]
-		keep_same_conns = False
-	else:
-		keep_same_conns = True
-
-	"""
-	Rate limit the bottleneck link 
-	"""
-	limit_interface(vr_limit,"eth0")
-
 	"""
 	Generate the configurations list
 	"""
 	configurations = []
-	for visualization in visualizations:
-		for free_b in free_bs:
-			for users_ph in users_phs:							
-				for conns in list_conns:
-					for rtts in list_rtts:	
-						for guard_bands in gbs:
-							for comp_rtt in comp_rtts:	
-								for queuelen in queuelens:
-									for queuelen_switch in queuelens_switch:
-										for switch_type in switch_types:
-											for num_colors in colors:
-												for marking in markers:
-													for symmetric in symmetrics:
-														for strength in [0.15]:
 
-															"""
-															How to mark packets
-															BUCKETS_MARKERS cascade of token bucket filters
-															IPTABLES_MARKERS iptables estimator
-															NO_MARKERS
-															"""
+	for markers in list_markers:
+		for queuelen in list_queuelen:
+			for num_bands in list_num_bands:
+				for guard_bands in list_guard_bands:
+					for free_b in list_free_b:
+						for do_comp_rtt in list_do_comp_rtt:
 
-															"""
-															Certain parameters are useless in standalone mode so we skip combinations.
-															"""
-															if switch_type == STANDALONE:
-																if (marking != NO_MARKERS or free_b != free_bs[0] or 
-																	guard_bands != gbs[0] or comp_rtt != comp_rtts[0] or 
-																	num_colors != colors[0]):
-																	print "Wrong standalone configuration, skip test"
-																	continue
-															
-															"""
-															If UGUALE is used, markers are mandatory 
-															"""
-															if (switch_type == UGUALE and marking == NO_MARKERS):
-																print "UGUALE without marking, skip test"
-																continue
+							#----------- Skip useless standalone configs. ----------
+							if switch_type == STANDALONE:
+								if (
+									(len(list_markers)>1 and markers != NO_MARKERS) or
+									(num_bands != list_num_bands[0]) or									
+									(free_b != list_free_b[0]) or 
+									(guard_bands != list_guard_bands[0]) or
+									(free_b != list_free_b[0]) or 
+									(do_comp_rtt != list_do_comp_rtt[0])
+								):					
+									print "Wrong standalone configuration, skip test"
+									continue
+							
+							#----------- Skip useless uguale configs. ----------
+							else:
+								if markers == NO_MARKERS:
+									print "UGUALE without markers, skip test"
+									continue
 
-															"""
-															coherence guard bands and number of colors
-															"""
-															if (switch_type == UGUALE and guard_bands>=num_colors):
-																print "guard_bands > num_colors , skip test"
-																continue
+								if guard_bands>num_bands:
+									print "guard_bands > num_bands, skip test"
+									continue	
 
-															"""
-															Only even num_colors are admitted with symmetric bands assignment
-															"""
-															if symmetric and num_colors%2!=0:
-																print "Only even num_colors with symmetric assignment, skip test"
-																continue
+								if do_symm and num_bands%2!=0:
+									print "Only even num_bands, skip test"
+									continue
+													
 
-															n_users = users_ph*len(ADDRESSES)
-															C = rate_to_int(bn_cap)
-															free_C = C*(1.0 - free_b) # capacity to use for guaranteed rates
+							#------------------------ RTTS ----------------------
+							"""
+							If the range has zero difference, all users have the same rtt
+							If not, RTTs will be equally distributed in the range
+							"""	
+							fixed_rtts = []
+							if len(range_rtts)>0:
+								delta_rtts = range_rtts[1]-range_rtts[0]
+								if delta_rtts == 0:
+									fixed_rtts = [range_rtts[0]]*n_users
+								else:
+									step = delta_rtts/float(n_users-1)
+									for i in range(n_users):
+										fixed_rtts.append(range_rtts[0]+(i*step))	
+									random.shuffle(fixed_rtts)
+							else:
+								fixed_rtts = list_rtts
+								range_rtts = [min(list_rtts), max(list_rtts)]
+							
+							if (len(set(fixed_rtts))==1 and 
+								len(list_do_comp_rtt)>1 and 	
+								do_comp_rtt):
+								print "Useless RTT compensation, skip test"
+								continue
 
-															#------------------------ GUARANTEED RATES ----------------------
+							#----------------TCP CONNECTIONS ---------------
+							
+							fixed_conns = []
+							if len(range_conns)>0:
+								delta_conns = range_conns[1]-range_conns[0]
+								if delta_conns == 0:
+									fixed_conns = [range_conns[0]]*n_users
+								else:
+									"""
+									es. range=[2,8] = (2,3,4,5,6,7,8)
+									#uguali=len(users)/delta(range) 
+									7 users --> (2,3,4,5,6,7,8)
+									9 users --> (2,3,4,5,6,7,8,2,3)
+									if not divisible, return to random
+									"""
+									conn_list = range(range_conns[0],range_conns[1]+1)
+									i=0
+									for u in range(n_users):
+										fixed_conns.append(conn_list[i])
+										i=(i+1)%len(conn_list)
+									random.shuffle(fixed_conns)	
+							else:
+								fixed_conns = list_conns
+								range_conns = [min(list_conns), max(list_conns)]									
 
-															if not various_guaranteed:
-																g_u = num_to_rate(free_C/float(n_users))
-																g_rates = [g_u]*n_users
-															else:
-																"""
-																Distribute g_u such as each one is double of the other
-																Es. 3 users per host, C = 50Mb
-																base = [1,2,3,1,2,3,1,2,3]
-																sum_base = 15
-																50/15 = 3.33
-																g_rates = base * 3.33 = [3.33, 6.66m 9.99, 13.33, 16.66] whose sum is C 
-																"""
-																base = (range(1,users_ph+1))*len(ADDRESSES)
-																sum_base = np.sum(base)
-																mult = float(free_C)/sum_base
-																g_rates = map(num_to_rate,map(lambda x: x*mult, base))
+							
+							#--------------- BANDS ASSIGNMENT ----------------
 
+							g_rates = [] # guaranteed rates
+							e_f_rates = [] # expected fair rates
+							m_m_rates = [] # maximum markers rates
+							coeffs = [] # compensate rtt coefficients
 
-															#------------------------ RTTS ----------------------
-															"""
-															If the range has zero difference, all users have the same rtt
-															If not, RTTs will be equally distributed in the range
-															"""	
-															if keep_same_rtts:
-																range_rtts=[rtts,rtts]	
+							C = rate_to_int(bn_cap)
+							free_C = C*(1.0 - free_b) # capacity to use for guaranteed rates
+							g_rate = free_C/float(n_users)
+							g_rates = [num_to_rate(g_rate)]*n_users
 
-															delta_rtts = range_rtts[1]-range_rtts[0]
-															if delta_rtts == 0:
-																fixed_rtts = [range_rtts[0]]*n_users
-															else:
-																step = delta_rtts/float(n_users-1)
-																fixed_rtts = []
-																for i in range(n_users):
-																	fixed_rtts.append(range_rtts[0]+(i*step))	
-																random.shuffle(fixed_rtts)
+							e_f_rate = C/float(n_users)
+							e_f_rates = [num_to_rate(e_f_rate)]*n_users
 
-															"""
-															If all users have the same rtts, 
-															comp_rtts can be true or false
-															and now it is true
-															the compensate-rtts has no meaning
-															"""
-															if len(set(fixed_rtts))==1 and len(comp_rtts)>1 and comp_rtt:
-																print "User with the same RTT and RTT compensation active, skip test"
-																continue
+							m_m_rate = ml.get_marker_max_rate(
+									g_rates, free_b, C, n_users, 
+									guard_bands, num_bands, do_symm) 	
 
-															#------------------------CONNECTIONS ----------------------
-															if keep_same_conns:
-																range_conns = [conns,conns]
-															delta_conns = range_conns[1]-range_conns[0]
-															if delta_conns == 0:
-																fixed_conns = [range_conns[0]]*n_users
-															else:
-																"""
-																es. range=[2,8] = (2,3,4,5,6,7,8)
-																#uguali=len(users)/delta(range) 
-																7 users --> (2,3,4,5,6,7,8)
-																9 users --> (2,3,4,5,6,7,8,2,3)
-																if not divisible, return to random
-																"""
-																fixed_conns = []
-																conn_list = range(range_conns[0],range_conns[1]+1)
-																i=0
-																for u in range(n_users):
-																	fixed_conns.append(conn_list[i])
-																	i=(i+1)%len(conn_list)
-																random.shuffle(fixed_conns)										
+							coeffs = [1]*n_users
+							if do_comp_rtt and not do_symm:
+								coeffs = ml.get_rtt_coefficients(
+										fixed_rtts, C, n_users, strength)
 
-															#------------- EXPECTED FAIR RATES + COMP RTTS + MAXIMUM MARKING RATES ------------
-															e_f_rates = [] #expected fair rates
-															m_m_rates = [] # maximum marking rates
-															coeffs = [] # coefficients that compensate rtt
-
-															if comp_rtt:
-																coeffs = get_rtt_coefficients(fixed_rtts,C,n_users, strength)
-															else:
-																coeffs = [1]*n_users
-
-															for i in range(n_users):
-																g_dr = rate_to_int(g_rates[i])
-																efr = g_dr+((free_b*C)/float(n_users))
-																e_f_rates.append(num_to_rate(efr))
-																
-																mmr_normal = get_marker_max_rate(g_rates, free_b, C, n_users, 
-																	guard_bands,num_colors, symmetric) 																
-																mmr = mmr_normal*coeffs[i]
-																m_m_rates.append(num_to_rate(mmr))
-
-															if queuelen_switch == -1:
-																qsw = optimal_queue_len(fixed_rtts, fixed_conns, C)
-															else:
-																qsw = queuelen_switch
+							for i in range(n_users):						
+								m_m_rate = m_m_rate * coeffs[i]								
+								m_m_rates.append(num_to_rate(m_m_rate))
 
 
-															configuration={
-																"cookie"		: cookie, 
-																"bn_cap"		: bn_cap, 	
-																"vr_limit"		: vr_limit, 	
-																"users_p_h"		: users_ph, 	
-																"n_users"		: n_users, 	
-																"g_rates"		: g_rates, 			
-																"range_rtts"	: range_rtts, 	
-																"fixed_rtts"	: fixed_rtts, 	
-																"range_conns"	: range_conns, 
-																"fixed_conns"	: fixed_conns, 	
-																"free_b"		: free_b, 																				
-																"duration"		: DURATION, 
-																"marking"		: marking,
-																"m_m_rates"		: m_m_rates,
-																"guard_bands"	: guard_bands,
-																"e_f_rates"		: e_f_rates,
-																"queuelen"		: queuelen,
-																"queuelen_switch": qsw,
-																"tech"			: tech,
-																"switch_type"	: switch_type,
-																"visualization" : visualization,
-																"comp_rtt" 		: comp_rtt,
-																"strength"		: strength,
-																"bands"			: num_colors,
-																"symmetric"		: symmetric,
-																"e_f_rates"		: e_f_rates
+							if queuelen == -1:
+								qsw = optimal_queue_len(fixed_rtts, fixed_conns, C)
+							else:
+								qsw = queuelen
 
-															}
 
-															configurations.append(configuration)
+							configuration={
+								"cookie"		: cookie, 
 
-		
+								"fixed_conns"	: fixed_conns, 	
+								"fixed_rtts"	: fixed_rtts, 
+								"list_users"	: list_users,
+								"n_users"		: n_users,
+								"range_conns"	: range_conns,
+								"range_rtts"	: range_rtts,
+
+								"vr_limit"		: vr_limit, 
+								"markers"		: markers,
+								"tech"			: tech,
+
+								"queuelen"		: qsw,
+								"switch_type"	: switch_type,
+
+								"num_bands"		: num_bands,
+								"guard_bands"	: guard_bands,
+								"bn_cap"		: bn_cap, 	
+								"free_b"		: free_b, 
+								"do_comp_rtt" 	: do_comp_rtt,
+								"strength"		: strength,
+								"do_symm"		: do_symm,
+								 	
+								"g_rates"		: g_rates, 				
+								"m_m_rates"		: m_m_rates,
+								"e_f_rates"		: e_f_rates,
+																												
+								"duration"		: DURATION
+							}
+
+							configurations.append(configuration)
+
+	random.shuffle(configurations)	
+	
 	"""
 	Calculate Estimated time
 	"""
-	num_tests = len(configurations)*repetitions
+	num_tests = len(configurations)
+
+	if num_tests == 0:
+		print "No tests, exit"
+		return
+
 	secs = num_tests*DURATION
-	print "{} Tests, total duration: [{},{}]".format(
-		num_tests, 
-		datetime.timedelta(seconds = secs),
-		datetime.timedelta(seconds = secs*MAX_TRIES))
-	random.shuffle(configurations)	
+	print "{} Tests, total duration: {}".format(
+		num_tests, datetime.timedelta(seconds = secs))
 
-	try:	
-		if tech != TECH_NONE:
-			# Create OVS and veths
-			set_up_hosts(tech)
 
+	
+	"""
+	Set the network
+	"""
+	limit_interface(vr_limit,"eth0")
+	for host in sorted(ADDRESSES):
+		str_ssh = "python create_ovs_and_veths.py -s{}".format(host)
+		cmd_ssh(host, str_ssh)
+
+	try:
 		for repetition in range(repetitions):
 			for configuration in configurations:
-
 				configuration["repetition"] = repetition
 				instance_name = get_instance_name(configuration)
 				pickle_name = "{}.p".format(instance_name)
@@ -360,21 +274,25 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 					print "Skip, existing test instance {}".format(instance_name)
 					continue
 
-				reset_switch()
 				#---------------------- CONFIGURE SWITCH ----------------------#
 
+				killall("iperf")
+				killall("xterm")
+				killall("bwm-ng")
+				reset_switch()
 
 				if configuration["switch_type"]==STANDALONE:
 
 					# Set the queuelen
 					cmd_ssh(
 						SWITCH_IP, 
-						"sudo sh set ovs_standalone_queues.sh {}".format(configuration["queuelen_switch"]))
+						"sudo sh set ovs_standalone_queues.sh {}".format(configuration["queuelen"]))
 
 				elif configuration["switch_type"]==UGUALE:
 
 					# Start the controller
-					cmd_ssh_bg(SWITCH_IP, "sudo ryu-manager /home/redfox/controller_code/uguale.py")
+					cmd_ssh_bg(SWITCH_IP, 
+						"sudo ryu-manager /home/redfox/controller_code/uguale.py")
 					time.sleep(2)
 
 					# Put the switch in UGUALE mode
@@ -382,14 +300,10 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 						SWITCH_IP,  
 						"python config_ovs_uguale.py -c{} -q{} -n{}".format(
 							"127.0.0.1:6633",
-							configuration["queuelen_switch"],
-							configuration["bands"]))
+							configuration["queuelen"],
+							configuration["num_bands"]))
 					time.sleep(4)
 
-				else:
-					print "Invalid switch configuration, exiting"
-					return
-					
 
 				print("Executing {} ...".format(instance_name))
 
@@ -397,21 +311,21 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 					print "Try number {}...".format(curr_try)
 					killall("iperf")
 					killall("xterm")
+					killall("bwm-ng")
+					
 					configuration["start_ts"] = time.time()+SYNC_TIME
 					clients=threading.Thread(target=clients_thread, args=(configuration,))
 					clients.start()
-					tcp_ports = range(FIRST_TCP_PORT,FIRST_TCP_PORT+configuration["users_p_h"])
-					udp_ports = []
-					data = ps.run_server("eth0", tcp_ports, udp_ports, 
-						interactive = False, 
-						duration = configuration["duration"]+SYNC_TIME, 
-						do_visualize = configuration["visualization"],
-						expected_users = configuration["n_users"],
-						check_time = BIRTH_TIMEOUT + SYNC_TIME)
 
-					# if not data:
-					# 	print "No data saved, test failed"
-					# 	continue
+					tcp_ports = range(FIRST_TCP_PORT,FIRST_TCP_PORT+max(list_users))
+					udp_ports = []
+					data = ps.run_server(
+						"eth0", tcp_ports, udp_ports,
+						interactive = False, 
+						duration = configuration["duration"]+SYNC_TIME+2, 
+						do_visualize = do_visualize,
+						expected_users = n_users,
+						check_time = BIRTH_TIMEOUT + SYNC_TIME)
 
 
 					#---------------------- SAVING ----------------------#				
@@ -434,123 +348,153 @@ def start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts,
 							print "Test failed too many times... skipping to next test!"
 							append_to_csv(configuration, [])
 	except (KeyboardInterrupt):
-	 	print "Test interrupted"
+		print "Test interrupted"
 	finally:
-	 	print "Test terminated"
+		print "Test terminated"
 		reset_switch()
 		reset_hosts()
 		killall("iperf")
 		killall("xterm")
 		killall("bwm-ng")
-		reboot_redfox14()
+		limit_interface("1g","eth0")
 
 
 def main(argv):
 
-	do_save = False
-	cookie = "test"
-	folder = ""
-	range_rtts = []
-	range_conns = []
-	list_rtts = []
-	list_conns = []
+	help_string = "TEST PARAMETERS:\n\
+	-f<folder> -c<cookie> -s<do save> -v<do visualize>\n\
+	USERS:\n\
+	-p<range conns:L> -P<list conns:L>\n\
+	-t<range rtts:L>  -T<list rtts:L>\n\
+	-u<users for each pc:L>\n\
+	USER FEATURES:\n\
+	-C<interface limit>\n\
+	-m<markers:no_markers/buckets_markers/iptables_markers:L>\n\
+	SWITCH:\n\
+	-q<queue lenght:L> -S<standalone/uguale>\n\
+	BANDS ASSIGNMENT:\n\
+	-Q<number of bands:L> 	-g<guard bands:L>\n\
+	-b<bottleneck capacity> -F<free bandwidth:L>\n\
+	-r<do compensate rtt:L>\n\
+	-k<do do_symm bands assignment>\n\
+	\n\
+	NOTES:\n\
+	- If conns/rtts lists are given, ranges are not considered\n\
+	- Queue lenght can be a number or -1 to use the optimal value\n\
+	- Parameters marked with <:L> can be lists"
 
-	"""
-	Notes:
-	- the visualization does not impact the view_result
-	- in average better results with queue 100
-	"""
-
-	help_string = "Usage: -f <folder> -c <cookie> -s <do-save>\n\
-	-t<range-rtts> -P<range-conn>\n\
-	-L<list-rtts> -C<list-conns>\n\
-	-b<bottleneck capacity> -v<veth limit>\n\
-	-u<users per host> -F<free bandwidth>\n\
-	-r<number of repetitions> -g<various guaranteed>\n\
-	-q<queuelens> -G<guard bands> -R <compensate-rtts>\n\
-	-V<visualization> -S<queuelens on switch> -U<switch:standalone/uguale>\n\
-	-M<markers:no_markers/buckets_markers/iptables_markers>\n\
-	-Q<number of colors>\n\
-	-K<symmetric-bands-assignment>\n\
-	folder: folder to save files\n\
-	cookie: special message to save\n\
-	do-save: 1 to save \n\
-	If lists are given, ranges are not considered\n\
-	various guaranteed: true if g_u varies for each user, false if they must be the same\n\
-	queuelens: queue lenght for every user on the PC\n\
-	markers:  NO_MARKERS/BUCKETS_MARKERS/IPTABLES_MARKERS\n\
-	queuelens_switch : number or -1 to use the optimal value"
-	
 	try:
-		opts, args = getopt.getopt(argv,"hf:c:s:t:P:L:C:b:v:u:F:r:g:q:G:R:V:S:U:M:Q:K:")
+		opts, args = getopt.getopt(argv,
+			"hf:c:s:v:p:P:t:T:u:C:m:q:S:Q:g:b:F:r:k:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
+
+	#--------------- DEFAULT VALUES -------------
+	folder = str(time.time)
+	cookie = "test"
+	do_save = False
+	do_visualize = False
+
+	range_conns = []
+	list_conns = []
+	range_rtts = []
+	list_rtts = []
+	list_users = [1,1,1]
+
+	vr_limit = "100m"
+	list_markers = ["no_markers"]
+
+	list_queuelen = [-1]
+	switch_type = "standalone"
+
+	list_num_bands = [8]
+	list_guard_bands = [2]
+	bn_cap = "94.1m"
+	list_free_b = [0.5]
+	list_do_comp_rtt = [False]
+	do_symm = False
 
 	for opt, arg in opts:
 		if opt == '-h':
 			print help_string
 			sys.exit()
+
 		elif opt in ("-f"):
 			folder = arg
 		elif opt in ("-c"):
 			cookie = arg
 		elif opt in ("-s"):
 			do_save = my_bool(arg)
+		elif opt in ("-v"):
+			do_visualize = my_bool(arg)
+
+		elif opt in ("-p"):
+			range_conns = map(int,arg.split(","))
+		elif opt in ("-P"):
+			list_conns = map(int,arg.split(","))
 		elif opt in ("-t"):
 			range_rtts = map(float,arg.split(","))
-		elif opt in ("-P"):
-			range_conns = map(int,arg.split(","))
-		elif opt in ("-L"):
+		elif opt in ("-T"):
 			list_rtts = map(float,arg.split(","))
-		elif opt in ("-C"):
-			list_conns = map(int,arg.split(","))
-		elif opt in ("-b"):
-			bn_cap = arg	
-		elif opt in ("-v"):
-			vr_limit = arg	
 		elif opt in ("-u"):
-			users_phs = map(int,arg.split(","))
-		elif opt in ("-F"):
-			free_bs = map(float,arg.split(","))
-		elif opt in ("-r"):
-			repetitions = int(arg)
-		elif opt in ("-g"):
-			various_guaranteed = my_bool(arg)
+			list_users = map(int,arg.split(","))
+
+		elif opt in ("-C"):
+			vr_limit = arg
+		elif opt in ("-m"):
+			list_markers = arg.split(",")
+
 		elif opt in ("-q"):
-			queuelens = map(int,arg.split(","))
-		elif opt in ("-G"):
-			gbs = map(int,arg.split(","))
-		elif opt in ("-R"):
-			comp_rtts = map(my_bool,arg.split(","))
-		elif opt in ("-V"):
-			visualizations = map(my_bool,arg.split(","))
+			list_queuelen = map(int,arg.split(","))
 		elif opt in ("-S"):
-			queuelens_switch = map(int,arg.split(","))	
-		elif opt in ("-U"):
-			switch_types = arg.split(",")
-		elif opt in ("-M"):
-			markers = arg.split(",")
+			switch_type = arg
+
 		elif opt in ("-Q"):
-			colors = map(int,arg.split(","))	
-		elif opt in ("-K"):
-			symmetrics = map(my_bool,arg.split(","))	
+			list_num_bands = map(int,arg.split(","))
+		elif opt in ("-g"):
+			list_guard_bands = map(int,arg.split(","))
+		elif opt in ("-b"):
+			bn_cap = arg
+		elif opt in ("-F"):
+			list_free_b = map(float,arg.split(","))
+		elif opt in ("-r"):
+			list_do_comp_rtt = map(my_bool,arg.split(","))	
+		elif opt in ("-k"):
+			do_symm = my_bool(arg)
 
 
+	n_users = sum(list_users)
 
-	if ((folder == "" and do_save==True) # trying to save nowhere
-	or (len(range_rtts)==0 and len(list_rtts)==0) # no rtt given
+	if ((len(range_rtts)==0 and len(list_rtts)==0) # no rtt given
 	or (len(range_conns)==0 and len(list_conns)==0) #no conns given
 	or (len(range_conns)>0 and len(range_conns)!=2) # range must have 2 boundaries
-	or (len(range_rtts)>0 and len(range_rtts)!=2)):	
-		print folder, do_save, range_rtts, list_rtts, range_conns, list_conns
+	or (len(range_rtts)>0 and len(range_rtts)!=2)  # range must have 2 boundaries
+	or (len(list_rtts)>0 and len(list_rtts)!= n_users) #the list should have a value for each user
+	or (len(list_conns)>0 and len(list_conns)!= n_users) #the list should have a value for each user
+	or (len(list_users)!=len(HOST_IDS))): # a number for each PC
+		print "Wrong users configuration"
 		print help_string
 		sys.exit(2)	
 
-	start_test(folder, cookie, do_save, range_conns, range_rtts, list_rtts, list_conns, 
-		bn_cap, vr_limit, users_phs, free_bs, repetitions, various_guaranteed, 
-		queuelens, gbs, comp_rtts, visualizations, queuelens_switch, switch_types, 
-		markers,colors, symmetrics)
+	for marker in list_markers:
+		if marker not in MARKING_TYPES:
+			print "Wrong markers type"
+			print help_string
+			sys.exit(2)	
+
+	if switch_type not in SWITCH_TYPES:
+		print "Wrong switch type"
+		print help_string
+		sys.exit(2)	
+
+	start_test(
+		folder, cookie, do_save, do_visualize,
+		range_conns, list_conns, range_rtts, list_rtts, list_users,
+		vr_limit, list_markers,
+		list_queuelen, switch_type,
+		list_num_bands, list_guard_bands, bn_cap, 
+		list_free_b, list_do_comp_rtt, do_symm)
 
 if __name__ == "__main__":
    main(sys.argv[1:])

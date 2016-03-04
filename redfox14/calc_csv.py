@@ -1,12 +1,9 @@
 #!/usr/bin/python
-from mylib import *
-from marking_lib import *
 import os, pickle, sys, getopt
 import view_result as vr
-import test as tt
+from mylib import *
 
 def calc_all_files(folder):
-
 	for file_name in os.listdir("./{}/".format(folder)):
 		if file_name[-2:] == ".p":
 			instance_name = file_name[:-2]
@@ -15,7 +12,7 @@ def calc_all_files(folder):
 			if not vr.test_is_valid(my_test):
 				print "ERROR: invalid test! Skipping..."
 				continue
-			tt.append_to_csv(my_test["params"], vr.get_stats(my_test))
+			append_to_csv(my_test["params"], vr.get_stats(my_test))
 
 def main(argv):
 	folder =  "/"

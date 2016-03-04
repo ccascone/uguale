@@ -36,7 +36,7 @@ EXTERNAL_PORT = 5
 ip_eth_type = 0x800
 arp_eth_type = 0x0806
 
-NUM_COLORS = 20 # number of DSCP and queues
+NUM_bands = 20 # number of DSCP and queues
 NUM_VETHS = 10 # number of addresses for each host
 
 EMULATED_IDS = {}
@@ -107,7 +107,7 @@ class FairTestApp(app_manager.RyuApp):
 				inst = [parser.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions)]
 				self.add_flow(datapath, match, instructions=inst, priority=RULE_PRIORITY)
 				#------------ EMULATED-->SERVER-------------- 
-				for dscp in range(1,NUM_COLORS+1): # i=1-->8			
+				for dscp in range(1,NUM_bands+1): # i=1-->8			
 					match = parser.OFPMatch(
 						eth_type=ip_eth_type,
 						ipv4_src="{}.{}".format(NETWORK_PREFIX,em_id),

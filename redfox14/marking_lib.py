@@ -1,10 +1,8 @@
-
 from mylib import *
-from tc_lib import *
 
 """
 This library creates the dict of rates {rate: DSCP}
-example with 3 colors:
+example with 3 bands:
 
 ------------- <---4000
 |			|
@@ -37,12 +35,12 @@ rates = {
 	rate2 :  2
 	g_rate :  1
 """
-def get_rates(g_rate, bn_cap, m_m_rate, num_colors, symmetric, e_f_rate):
+def get_rates(g_rate, bn_cap, m_m_rate, num_bands, do_symm, e_f_rate):
 
 	rates = {}
 
-	if symmetric:
-		nc2 = num_colors-2
+	if do_symm:
+		nc2 = num_bands-2
 		delta = 2 * float(m_m_rate - e_f_rate) / float(nc2)
 
 		thr = e_f_rate - float((nc2/2)*delta)
@@ -54,15 +52,15 @@ def get_rates(g_rate, bn_cap, m_m_rate, num_colors, symmetric, e_f_rate):
 			dscp += 1
 			rates[thr] = dscp
 
-		rates[bn_cap] = num_colors 
+		rates[bn_cap] = num_bands 
 
 	else:
-		delta = float(m_m_rate)/(num_colors-1)
+		delta = float(m_m_rate)/(num_bands-1)
 		rates[g_rate]=1
-		for i in range(1,num_colors):
+		for i in range(1,num_bands):
 			dscp = i+1
 			new_rate = g_rate + (i*delta)
-			if (new_rate >= bn_cap) or (dscp==num_colors):
+			if (new_rate >= bn_cap) or (dscp==num_bands):
 				new_rate = bn_cap
 
 			rates[new_rate] = dscp
@@ -79,7 +77,7 @@ def get_rates(g_rate, bn_cap, m_m_rate, num_colors, symmetric, e_f_rate):
 """
 Parameters must be numbers, return string
 
-if guard_bands == -1, do not use MMR --> mmr = (num_colors-1)*(C/float(num_colors))
+if guard_bands == -1, do not use MMR --> mmr = (num_bands-1)*(C/float(num_bands))
 
 Es. guard bands = 2
 
@@ -129,37 +127,38 @@ Symmetric
 |		|
 ---------
 
-The space [a,b] is divided into num_colors-2 bands.
+The space [a,b] is divided into num_bands-2 bands.
 Band 1 is assigned to what is under a
-Band num_colors is assigne to what is over b
+Band num_bands is assigned to what is over b
 Since the EFR must be between two bands, 
-only even num_colors are expected.
+only even num_bands are expected.
 
 amplitude = (C/10)*guard_bands
 amplitude <= EFR
 amplitude <= C - EFR
 
 """
-def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, num_colors, symmetric=False):
+def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, num_bands, do_symm=False):
 
 	g_max = max(map(rate_to_int, g_rates)) # maximum guaranteed rate [int] 
 	mfr = g_max + ((free_b*C)/float(n_users)) # maximum fair rate at which an user will converge
 
-	if symmetric:
+	if do_symm:
 		amplitude = (C/10.0)*guard_bands
 		amplitude = min(mfr, amplitude)
 		amplitude = min(C - mfr, amplitude)
 		return mfr + amplitude
 
-	# If not used, c must be divided simply in num_colors bands
-	if guard_bands == -1 or guard_bands>=num_colors:
-		return (num_colors-1)*(C/float(num_colors))
+	# If the mmr is not used, c must be divided simply in num_bands bands
+	if guard_bands == -1 or guard_bands>=num_bands:
+		return (num_bands-1)*(C/float(num_bands))
 
 	if guard_bands == 0:
 		return mfr
 
-	if (num_colors-guard_bands-1)>0:
-		delta = mfr/float(num_colors-guard_bands-1)
+	# normal mmr case
+	if (num_bands-guard_bands-1)>0:
+		delta = mfr/float(num_bands-guard_bands-1)
 	else:
 		delta = mfr
 
