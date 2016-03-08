@@ -1,4 +1,10 @@
 #!/usr/bin/python
+"""
+Applies a netem qdisc to an interface.
+If necessary, adds markers (token buckets or iptables)
+to virtual interfaces.
+"""
+
 from mylib import *
 import tc_lib as tc
 import iptables_lib as ipt
@@ -7,44 +13,42 @@ import marking_lib as ml
 # -------------------- METER/MARKER WITH BUCKETS -----------------------#
 
 """
-All packets that pass through the dsmark will
-be classified by token bucket filters (no ports lookup)
+Create the token bucket filters that send packets to DSMARK classes.
+
+Example:
+------------- <---4000
+|			|
+|	3		|
+------------- <---2000
+|	2		|
+------------- <---1000
+|	1		|
+-------------
+
+rates={
+	1000 : 1
+	2000 : 2
+	4000 : 3
+}
+
+=====> 	consume 1000, if ok 1 else
+		consume 1000, if ok 2 else
+		3
 """
 def add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands, 
 	dest_port_tcp=0, veth_id=0):
-	"""
-	------------- <---4000
-	|			|
-	|	3		|
-	------------- <---2000
-	|	2		|
-	------------- <---1000
-	|	1		|
-	-------------
 
-	rates={
-		1000 : 1
-		2000 : 2
-		4000 : 3
-	}
-
-	=====> 	consume 1000, if ok 1 else
-			consume 1000, if ok 2 else
-			3
-	"""
 	cumulative_rate = 0	
 
-	"""
-	user1: prio 1 2 3 4 5 6 7 8
-	user2: prio 9 10 11...
-	"""
+	# user1: prio 1 2 3 4 5 6 7 8
+	# user2: prio 9 10 11...
 	user_base_prio = (user-1)*num_bands
 
 	for rate in sorted(rates): # i=1-->8
 		dscp = rates[rate]
 		prio = user_base_prio + dscp
 		"""
-		The default class is the fighest DSCP.
+		The default class is the highest DSCP.
 		For all the others we need a filter to direct to classes
 		"""
 		if dscp<max_dscp(rates):
@@ -60,9 +64,31 @@ def add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands,
 
 # ------------------- METER/MARKER WITH IPTABLES -----------------------------#
 """
-iptables will call the classify action that will send
-packets to dsmark classes.
-dsmark qdisc must be attached to eth0 root
+Create the set of iptables rules that act like a meter.
+Packets are sent to an estimator and then classified
+for the DSMARK qdisc. The DSMARK qdisc must be attached to eth0 root.
+
+Example:
+
+------------- <---4000
+|			|
+|	3		|
+------------- <---2000
+|	2		|
+------------- <---1000
+|	1		|
+-------------
+
+rates={
+	1000 : 1
+	2000 : 2
+	4000 : 3
+}
+
+=====> 	rate >2000 : 3
+		rate >1000 : 2
+		other: 1
+
 """
 def iptables_meter_marker(rates, dest_port_tcp, interval, dsmark_qdisc_id):
 	est_name = "EST{}".format(dest_port_tcp)
@@ -72,26 +98,6 @@ def iptables_meter_marker(rates, dest_port_tcp, interval, dsmark_qdisc_id):
 	"""
 	ipt.send_to_estimator(est_name, "tcp", dest_port_tcp, interval)
 	# send_to_estimator(est_name,"udp", dest_port_udp, interval)
-	"""
-	------------- <---4000
-	|			|
-	|	3		|
-	------------- <---2000
-	|	2		|
-	------------- <---1000
-	|	1		|
-	-------------
-
-	rates={
-		1000 : 1
-		2000 : 2
-		4000 : 3
-	}
-
-	=====> 	rate >2000 : 3
-			rate >1000 : 2
-			other: 1
-	"""
 
 	my_rates = dict(rates) 
 	del my_rates[max(my_rates)] # Remove the highest rate
@@ -109,21 +115,16 @@ def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen,
 
 	tc.clean_interface(intf)		
 	ipt.flush_iptables()
-
 	n_users = len(g_rates)
 
-	"""
-	Configure the physical interfce
-	"""	
+	# Configure the physical interfce
 	if queuelen>0:
 		set_queuelen(intf, queuelen*n_users)
 		tc.add_pfifo_qdisc(intf, "root", 1)
 	else:
 		set_queuelen(intf, 1000) # default value
 
-	"""
-	DSMARK
-	"""
+	# Create a single DSMARK qdisc
 	dsmark_qdisc_id = 1
 	if marking != NO_MARKERS:
 		tc.add_dsmark_qdisc(intf, "root", dsmark_qdisc_id, 64, num_bands)

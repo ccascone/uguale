@@ -1,14 +1,20 @@
+#!/usr/bin/python
+"""
+Set of functions executing tc calls
+"""
 from mylib import *
 
 """
-This library contains functions that executes tc calls
+Delete all qdiscs from an interface
 """
-
-# delete qdiscs from intf
 def clean_interface(intf):
 	sudo_cmd("tc qdisc del dev {} root".format(intf))
 
-# prinnt qdisc class and filters of a intf
+
+"""
+Print the tc configuration (qdiscs, classes and filters)
+applied to an interface.
+"""
 def print_tc_configuration(intf, qdiscs=[]):
 	print "---------- tc configuration for {} ----------".format(intf)
 	print "---------- qdiscs ----------"
@@ -22,19 +28,26 @@ def print_tc_configuration(intf, qdiscs=[]):
 
 # ------------------------------------- DSMARK --------------------------------------#
 
+"""
+Creates a DSMARK qdisc
+"""
 def add_dsmark_qdisc(intf, parent_id, dsmark_qdisc_id, num_classes, default_class):
 	command = "tc qdisc add dev {} {} handle {}: dsmark indices {} default {}".format(
 			intf, parent_string(parent_id), dsmark_qdisc_id, num_classes, default_class)
 	sudo_cmd(command)
 
+"""
+The DSMARK qdisc is created with num_classes empty classes.
+This functions create the real DSMARK classes attached to that qdisc.
+"""
 def change_dsmark_class(intf, dsmark_qdisc_id, dsmark_class_id, dscp):
-	# print "Changing dsmark class {}:{} to mark DSCP {}".format(
-	# 	dsmark_qdisc_id, dsmark_class_id, dscp)
 	command = "tc class change dev {} parent {}: classid {}:{} dsmark mask 0xff value {}".format(
 			intf, dsmark_qdisc_id, dsmark_qdisc_id, dsmark_class_id, hex(dscp << 2))
 	sudo_cmd(command)
 
-
+"""
+Add a tc filter (that send packets to a certain DSMARK class)
+"""
 def add_dsmark_filter(intf, dsmark_qdisc_id, prio, rate, burst, mtu, dsmark_class_id, protocol="", dport=0, fw=-1):
 
 	match_field, police_field = "", ""
@@ -61,6 +74,9 @@ def add_dsmark_filter(intf, dsmark_qdisc_id, prio, rate, burst, mtu, dsmark_clas
 
 # ------------------------------------- NETEM --------------------------------------#
 
+"""
+Add a netem qdisc to an interface
+"""
 def add_netem_qdisc(intf, parent_id, netem_qdisc_id, rate=0, delay=0, limit=0):
 
 	if rate==0 and delay==0:
@@ -83,14 +99,19 @@ def add_netem_qdisc(intf, parent_id, netem_qdisc_id, rate=0, delay=0, limit=0):
 
 	sudo_cmd(command)
 
+"""
+Add a packet FIFO qdisc to an interface
+"""
+def add_pfifo_qdisc(intf, parent_id, pfifo_id):
+	command = "tc qdisc add dev {} {} handle {}: pfifo".format(
+		intf, parent_string(parent_id), pfifo_id)
+	sudo_cmd(command)
 
+"""
+Return the parent string to be used in tc commands
+"""
 def parent_string(parent_id):
 	if parent_id=="root":
 		return parent_id
 	else:
 		return "parent {}:".format(parent_id)
-
-def add_pfifo_qdisc(intf, parent_id, pfifo_id):
-	command = "tc qdisc add dev {} {} handle {}: pfifo".format(
-		intf, parent_string(parent_id), pfifo_id)
-	sudo_cmd(command)

@@ -1,8 +1,13 @@
+#!/usr/bin/python
+"""
+Manage the assignment of bands and 
+creates the dict of rates (rate: DSCP)
+"""
+
 from mylib import *
 
 """
-This library creates the dict of rates {rate: DSCP}
-example with 3 bands:
+example of rate dict (3 bands):
 
 ------------- <---4000
 |			|
@@ -19,21 +24,12 @@ rates={
 	4000 : 3
 }
 
-key is the threshold
-value is the DSCP
+threshold : DSCP
 """
 
 
 """
 Return the dict of rates
-es.
-rates = {
- 	bn_cap or slightly greater : X+1
-	mmr : X
-	...
-	rate3 :  3
-	rate2 :  2
-	g_rate :  1
 """
 def get_rates(g_rate, bn_cap, m_m_rate, num_bands, do_symm, e_f_rate):
 
@@ -240,12 +236,12 @@ def print_rates(rates, bn_cap):
 
 """
 Convert the dict of rates in a sorted list of rates expressed in byte/s
-Udsed for python marker
+Used for python marker
 [2000-3000] --> 3
 [1000-2000]	--> 2
 [0-1000] 	--> 1
 
-es:{1000:1, 2000:2, 3000:3} ==> [0, 1000/8, 2000/8, 3000/8]
+es: {1000:1, 2000:2, 3000:3} ==> [0, 1000/8, 2000/8, 3000/8]
 """
 def rates_to_list_bytes(rates):
 	r = [0]

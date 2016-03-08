@@ -1,4 +1,7 @@
 #!/usr/bin/python
+"""
+Scan a folder of pickle files and add them to the CSV file
+"""
 import os, pickle, sys, getopt
 import view_result as vr
 from mylib import *

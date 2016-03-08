@@ -1,12 +1,12 @@
 #!/usr/bin/python
+"""
+Script executed by each "client" PC.
+Applies the netem-marking settings and starts
+ipert TCP connections at a certain instant.
+"""
 import sys, getopt, time
 import netem_and_marker as nm
 from mylib import *
-
-"""
-program executed on each host PC.
-Apply settings and start connectios
-"""
 
 def run_program(
 	duration, start_ts,

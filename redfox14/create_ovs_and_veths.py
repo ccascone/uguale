@@ -1,13 +1,10 @@
 #!/usr/bin/python
-
+"""
+Prepares a PC to simulate many users by creating an internal 
+OVS switch with virtual interfaces.
+"""
 import sys, getopt, time
 from mylib import *
-
-"""
-Prepare a PC to simulate many users by creating 
-an internal bridge, veths and restoring connectivity.
-Create veth1 to veth10 with ip es. .30 to .39
-"""
 
 def run_program(pc_ip):
 	killall("iperf")

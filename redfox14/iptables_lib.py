@@ -1,28 +1,35 @@
+#!/usr/bin/python
+"""
+iptables functions
+"""
 from mylib import *
 
 """
-This library contain all the functions
-necessary to use iptables
+Delete all rules
 """
-
 def flush_iptables():
 	sudo_cmd("iptables -F")
 	sudo_cmd("iptables -F -t mangle")
 	sudo_cmd("iptables -F -t nat")
 
+"""
+Print all rules
+"""
 def print_iptables():
 	sudo_cmd("iptables -nL")
 	sudo_cmd("iptables -nL -t mangle")
 	sudo_cmd("iptables -nL -t nat")
 
-# modify the ip address of packet exiting the interface with
-# the IP address of the interface
+"""
+Write in packets the IP address of the egress interface
+"""
 def masquerade(intf):
 	sudo_cmd("iptables -t nat -A POSTROUTING -o {} -j MASQUERADE".format(intf))
 
-
-# classify and accept packets over the threshold rate with a certain dport
-# if no threshold is passed, match only the dport
+"""
+Classify and accept packets over the threshold rate with a certain dport.
+If no threshold is passed, match only the dport
+"""
 def classify_and_accept(est_name, protocol, dest_port, qdisc_id, class_id, rate=-1):
 	if rate>0:
 		match_on_rate = "-m rateest --rateest {} --rateest-gt --rateest-bps {} ".format(
@@ -42,8 +49,8 @@ def classify_and_accept(est_name, protocol, dest_port, qdisc_id, class_id, rate=
 
 
 """
-Mark packets based on destination port 
-so they will be looked up with other routing tables
+FW mark packets based on the destination port 
+(this allows packets to be routed with different routing tables)
 """
 def mark_port_based(protocol, dest_port, dest_intf_id):
 	command = "iptables -t mangle -A OUTPUT -p {} --dport {} \
@@ -52,8 +59,8 @@ def mark_port_based(protocol, dest_port, dest_intf_id):
 
 
 """
-The minimum interval is 250ms
-Send all packets to a certain estimator
+Send all packets for a certain dport to a deidcated estimator.
+NB. The minimum interval applied is 250ms
 """
 def send_to_estimator(est_name, protocol, dest_port, interval):
 	command = "iptables -A OUTPUT \

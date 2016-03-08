@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import os, re, pexpect, subprocess, math, time
 import numpy as np
 
@@ -137,6 +138,11 @@ STATS_BRIEF_SHOW = [
 	"Ratio G/T mean", "Ratio G/T var"
 ]
 
+
+"""
+Given the params and the stats of a test,
+append them to the CSV file
+"""
 def append_to_csv(params, stats):
 
 	rows_to_write = []
@@ -238,19 +244,29 @@ def launch_bg(command, do_print=False):
 
 
 """
-Execute a command in the terminal
+Execute a command in the shell
 """
 def cmd(command):
 	subprocess.call(command, shell=True) 
 
+"""
+Execute a sudo command in the shell
+"""
 def sudo_cmd(command):
 	subprocess.call("sudo {}".format(command), shell=True) 
 
+"""
+Open an XTERM and send an SSH command
+"""
 def cmd_ssh_xterm(pc_ip, command):
 	cmd_str = "(xterm -hold -e \"ssh {} '{}'\") & ".format(pc_ip, command)
 	cmd(cmd_str)
 	print cmd_str
 
+"""
+Send an SSH command and wait for
+the remote task to complete.
+"""
 def cmd_ssh(host, remoteCmd):
 	# localCmd = "/usr/bin/ssh", host, "<<", "EOF\n{}\nEOF".format(remoteCmd)
 	localCmd = "/usr/bin/ssh", host, remoteCmd
@@ -263,6 +279,9 @@ def cmd_ssh(host, remoteCmd):
 		print "*** Error with SSH command {}: {}".format(localCmd, result)
 	return result
 
+"""
+Send an SSH command and return immediately.
+"""
 def cmd_ssh_bg(host, remoteCmd):
 	# localCmd = "/usr/bin/ssh", host, "<<", "EOF\n{}\nEOF".format(remoteCmd)
 	localCmd = "/usr/bin/ssh", host, remoteCmd
@@ -285,7 +304,7 @@ def killall(process_name, arg=None):
 # ------------------------ OTHER UTILITIES -------------------------#
 
 """
-Appenzeller:
+Calculate the optimale queue lenght with the Appenzeller formula:
 q_opt= (RTT*C)/sqrt(n_flows)
 """
 def optimal_queue_len(rtts, conns, C):
@@ -297,6 +316,9 @@ def optimal_queue_len(rtts, conns, C):
 	length_pacc = max(num_flows*2, length_pacc) 
 	return min(length_pacc, 10000)
 
+"""
+Make an interface negotiate for 100Mbps or 1Gbps
+"""
 def limit_interface(limit, intf):
 	if limit=="100.0m":
 		sudo_cmd("ethtool -s {} advertise 0x008 autoneg on \
@@ -305,16 +327,23 @@ def limit_interface(limit, intf):
 		sudo_cmd("ethtool -s {} advertise 0x020 autoneg on \
 			speed 1000 duplex full".format(intf))
 
+"""
+Reset the network configuration for Redfox1,2,3
+"""
 def reset_hosts():
 	for host in sorted(ADDRESSES):
 		str_ssh = "sudo sh /redfox-automations/all/reset_net_conf"
 		cmd_ssh_bg(host, str_ssh)
 
+"""
+Reset the network configuration for Redfox0
+"""
 def reset_switch():
 	cmd_ssh_bg(SWITCH_IP, "sudo sh reset_redfox0.sh")
-	time.sleep(2)
 
-
+"""
+Given a test configuration, return its filename
+"""
 def get_instance_name(configuration):
 	instance_name = ""
 	for key in INSTANCE_NAME_PARAMS:
@@ -326,14 +355,25 @@ def get_instance_name(configuration):
 	return instance_name
 
 
+"""
+Set a queue length on a given interface
+"""
 def set_queuelen(intf, length):
 	sudo_cmd("ifconfig {} txqueuelen {}".format(intf, int(length)))	
 
+
+"""
+Return the boolean True if val is "True" or "true" or True or 1
+"""
 def my_bool(val):
 	if val in ["True", "true", True, 1]:
 		return True
 	return False
 
+"""
+Cast an element (or the elements of a list, recursively)
+to 3 decimal digits.
+"""
 def cast_value(value):
 	if isinstance(value, list) or isinstance(value, tuple):
 		# i'm a list
