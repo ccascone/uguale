@@ -1,4 +1,3 @@
-#!/usr/bin/python
 import os, re, pexpect, subprocess, math, time
 import numpy as np
 
@@ -181,17 +180,19 @@ def rate_to_int(rate_str):
 	try:
 		return int(float(rate_str))
 	except ValueError:
-		regex_rate = re.compile("([0-9]{1, 20}.[0-9]{1, 20})([m, g, k]{0, 1})")
+		regex_rate = re.compile('([0-9]{1,20}.[0-9]{1,20})([m,g,k]{0,1})')
 		m = regex_rate.match(rate_str)
-		num = float(m.groups()[0])
-		mult = m.groups()[1]
+		if m is not None:
+			num = float(m.groups()[0])
+			mult = m.groups()[1]
 
-		if mult=="k":
-			return int(num * 10**3)
-		if mult=="m":
-			return int(num * 10**6)
-		if mult=="g":
-			return int(num * 10**9)
+			if mult=="k":
+				return int(num * 10**3)
+			if mult=="m":
+				return int(num * 10**6)
+			if mult=="g":
+				return int(num * 10**9)
+		print "string={}, match={}".format(rate_str, m)
 
 """
 Conversion es. 1000-->1.0k
@@ -366,7 +367,7 @@ def set_queuelen(intf, length):
 Return the boolean True if val is "True" or "true" or True or 1
 """
 def my_bool(val):
-	if val in ["True", "true", True, 1]:
+	if val in ["True", "true", "1", True, 1]:
 		return True
 	return False
 
@@ -389,7 +390,7 @@ def cast_value(value):
 			try:
 				return round(float(value), 3)
 			except ValueError:
-				regex_float_rate = re.compile("([0-9]{1, 20}.[0-9]{1, 20})([m, g, k]{0, 1})")
+				regex_float_rate = re.compile('([0-9]{1,20}.[0-9]{1,20})([m,g,k]{0,1})')
 				m = regex_float_rate.match(value)
 				if m:
 					return "{:.3f}{}".format(float(m.groups()[0]), m.groups()[1])

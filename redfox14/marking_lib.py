@@ -129,7 +129,8 @@ amplitude <= EFR
 amplitude <= C - EFR
 
 """
-def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, num_bands, do_symm=False):
+def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, 
+	num_bands, do_symm=False):
 
 	g_max = max(map(rate_to_int, g_rates)) # maximum guaranteed rate [int] 
 	mfr = g_max + ((free_b * C) / float(n_users)) # maximum fair rate at which an user will converge

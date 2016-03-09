@@ -30,9 +30,7 @@ def clients_thread(params):
 			m_m_rates_host.append(m_m_rates.pop(0))
 			e_f_rates_host.append(e_f_rates.pop(0))
 
-		str_ssh = "python start_users.py -d{} -t{} \
-		-P{} -T{} -C{} -m{} \
-		-b{} -G{} -M{} -E{} -Q{} -K{}".format(
+		str_ssh = "python start_users.py -d{} -t{} -P{} -T{} -C{} -m{} -b{} -G{} -M{} -E{} -Q{} -K{}".format(
 			params["duration"],	params["start_ts"],
 
 			",".join(map(str, fixed_conns_host)),
@@ -472,6 +470,13 @@ def main(argv):
 		print "Wrong switch type"
 		print help_string
 		sys.exit(2)	
+
+	print (folder, cookie, do_save, do_visualize,
+		range_conns, list_conns, range_rtts, list_rtts, list_users,
+		vr_limit, list_markers,
+		list_queuelen, switch_type,
+		list_num_bands, list_guard_bands, bn_cap, 
+		list_free_b, list_do_comp_rtt, do_symm)
 
 	start_test(
 		folder, cookie, do_save, do_visualize,
