@@ -51,7 +51,7 @@ def add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands,
 		The default class is the highest DSCP.
 		For all the others we need a filter to direct to classes
 		"""
-		if dscp<max_dscp(rates):
+		if dscp<ml.max_dscp(rates):
 			width = rate-cumulative_rate
 			cumulative_rate += width
 			burst = int(width/float(HZ))

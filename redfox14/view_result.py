@@ -55,8 +55,6 @@ def test_is_valid(test):
 					src, small_samples, min_val)
 				flag = False
 
-	# TODO: check that the amount of 0 samples is less then a quota
-
 	return flag
 
 def trim_samples(samples, duration):
@@ -93,22 +91,16 @@ def get_jain_index(thrs, efrs):
 
 
 def get_stats(test):
-	"""
-	Recover useful parameters and initialize variables
-	"""
+
 	t_vals = []
 	t_ts = []
 	normalized_vals = []
 	joint_vals = []
 	data = test["data"]
 	params = test["params"]
-	# free_b = params["free_b"]
-	# rate_to_int(params["g_rates"][i])
-
 	efrs = map(rate_to_int, params["e_f_rates"])
 	link_c = rate_to_int(params["vr_limit"])
-	duration = test["params"]["duration"]
-
+	duration = params["duration"]
 	means = []
 	stds = []
 	ips=[]
@@ -169,7 +161,6 @@ def get_stats(test):
 		resample directly at each IPERF_REPORT_INTERVAL
 		"""
 		r_v = f(resampled_ts)
-		# print len(r_v)
 		resampled_vals.append(r_v)
 
 	total_goodput = []
@@ -185,9 +176,7 @@ def get_stats(test):
 	Throughput
 	"""
 	bwm_ng= data["SUM"]["total"]
-
 	trimmed_ts_bwm, trimmed_vals_bwm = trim_samples(bwm_ng, duration)
-
 	normalized_throughput = map(lambda x: x/float(link_c), trimmed_vals_bwm)
 	thr_mean = np.mean(normalized_throughput)
 	thr_var = np.var(normalized_throughput)
@@ -206,7 +195,6 @@ def get_stats(test):
 
 	f = interpolate.interp1d(bwm_ng["t"], bwm_ng["val"])
 	resampled_throughput = f(resampled_ts)
-
 	ratio_gt = [float(total_goodput[i]) / resampled_throughput[i] for i in range(len(total_goodput))]
 	ratio_gt_mean = np.mean(ratio_gt)
 	ratio_gt_var = np.var(ratio_gt) 
@@ -229,11 +217,7 @@ def get_stats(test):
 	fixed_rtts = params["fixed_rtts"]	
 	same_rtts = {}	
 	for i in ids:
-		if ("netem" in params and not params["netem"]): 
-			rtt = RTT_NO_NETEM
-		else:
-			rtt = fixed_rtts[i]
-
+		rtt = fixed_rtts[i]
 		if rtt not in same_rtts:
 			same_rtts[rtt] = {}
 			same_rtts[rtt]["vals"] = []
@@ -300,12 +284,8 @@ def get_text(params, stat, brief=False):
 	users = map(lambda x: x+1, stat["ids"])
 	text += "USERS\n"
 	for i in range(len(users)):
-		if ("netem" in params and not params["netem"]):
-			text += "User {}: {}c, {}ms\n".format(
-				users[i], int(params["fixed_conns"][i]), RTT_NO_NETEM)
-		else:	
-			text += "User {}: {}c, {}ms\n".format(
-				users[i], int(params["fixed_conns"][i]), int(params["fixed_rtts"][i]))
+		text += "User {}: {}c, {}ms\n".format(
+			users[i], int(params["fixed_conns"][i]), int(params["fixed_rtts"][i]))
 
 	# parameters
 	if brief:
@@ -326,7 +306,7 @@ def get_text(params, stat, brief=False):
 				value = params[param]
 
 			"""
-			Adjust parameter
+			Adjust parameter for unusual configurations
 			"""
 			if params["switch_type"] == STANDALONE:
 				if param == "markers":
@@ -374,10 +354,9 @@ def get_text(params, stat, brief=False):
 
 
 def plot_file(test, stat, instance_name, new_folders, do_save):
+
 	params = dict(test["params"])
-
 	new_params = cast_value(params)
-
 	text = get_text(new_params, stat, brief=True)
 
 	subplots = {
@@ -430,7 +409,8 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	# |
 	# ------+ x
 
-	fig.subplots_adjust(left=hor_border*0.5, bottom=ver_border, right=end_plots, top=1-(ver_border*0.66))
+	fig.subplots_adjust(left=hor_border*0.5, bottom=ver_border, 
+		right=end_plots, top=1-(ver_border*0.66))
 
 	users = map(lambda x: x+1, stat["ids"])
 	fixed_rtts = test["params"]["fixed_rtts"]
@@ -445,8 +425,8 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	ax["gen"].set_xlim([x_min, x_max])
 	ax["gen"].xaxis.set_ticks(sorted(users))	
 	ax["gen"].set_ylim(y_lims)	
-	ax["gen"].errorbar(users, stat["means"], stat["stds"], linestyle="None", 
-		marker="o", color="black", label="Mean/std")
+	ax["gen"].errorbar(users, stat["means"], stat["stds"], 
+		linestyle="None", marker="o", color="black", label="Mean/std")
 	ax["gen"].legend()
 	ax["gen"].axhline(linewidth=1, color="black")       
 
@@ -462,7 +442,8 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 		alpha=1)
 
 	max_y = max(n)*1.10
-	ax["distr"].plot([mean_rate, mean_rate], [0, max_y], color="red", label="Mean", linewidth=1.5)
+	ax["distr"].plot([mean_rate, mean_rate], [0, max_y], 
+		color="red", label="Mean", linewidth=1.5)
 	ax["distr"].legend()
 	ax["distr"].set_xlim(x_lims)	
 	ax["distr"].set_ylim([0, max_y])	
@@ -550,7 +531,8 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 		quality = "Q{}".format(int(stat["distr_mse"]*10**8))
 		timestamp = str(params["start_ts"]).replace(".", "_")
 
-		fig_filename="{}/{}_{}_{}.png".format(new_folders[0], quality, instance_name, timestamp)
+		fig_filename="{}/{}_{}_{}.png".format(new_folders[0], quality, 
+			instance_name, timestamp)
 		plt.savefig(fig_filename, format="PNG")
 
 		pdf_filename="{}/{}.pdf".format(new_folders[1], timestamp)

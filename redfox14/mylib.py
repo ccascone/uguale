@@ -15,6 +15,12 @@ SERVER_IP = "{}.{}".format(NETWORK_PREFIX, SERVER_ID)
 SWITCH_IP = "{}.{}".format(NETWORK_PREFIX, SWITCH_ID)
 NUM_VETHS = 10
 
+"""
+The maximum number of prio classes is 16
+but only 15 are available (because the first is "fake")
+"""
+MAX_NUM_BANDS = 15 # maximum number of DSCP and queues
+
 # pc1 --->192.168.200.1 ---> [110, 119]
 # pc2 --->192.168.200.2 ---> [120, 129]
 # pc3 --->192.168.200.3 ---> [130, 139]
@@ -53,7 +59,7 @@ UGUALE = "uguale"
 SWITCH_TYPES = [STANDALONE, UGUALE]
 IPERF_REPORT_INTERVAL = 1 
 DURATION = 180 # duration of tests
-MAX_TRIES = 3 # max failed tries to declare a test/configuration failed
+MAX_TRIES = 1 # max failed tries to declare a test/configuration failed
 SYNC_TIME = 10 # after this time from t0(server) users start iperf connections
 RESULTS_CSV_FILENAME = "results.csv"
 
@@ -322,25 +328,29 @@ Make an interface negotiate for 100Mbps or 1Gbps
 """
 def limit_interface(limit, intf):
 	if limit=="100.0m":
+		print "Autoneg {}@100Mbps".format(intf)
 		sudo_cmd("ethtool -s {} advertise 0x008 autoneg on \
 			speed 100 duplex full".format(intf))
 	else:
+		print "Autoneg {}@1Gbps".format(intf)
 		sudo_cmd("ethtool -s {} advertise 0x020 autoneg on \
 			speed 1000 duplex full".format(intf))
+	time.sleep(5)
 
 """
 Reset the network configuration for Redfox1,2,3
 """
-def reset_hosts():
-	for host in sorted(ADDRESSES):
-		str_ssh = "sudo sh /redfox-automations/all/reset_net_conf"
-		cmd_ssh_bg(host, str_ssh)
+def reset_pcs():
+	for pc_address in sorted(ADDRESSES):
+		str_ssh = "sudo sh delete_ovs.sh {}".format(pc_address)
+		cmd_ssh_bg(pc_address, str_ssh)
+	time.sleep(2)
 
 """
 Reset the network configuration for Redfox0
 """
 def reset_switch():
-	cmd_ssh_bg(SWITCH_IP, "sudo sh reset_redfox0.sh")
+	cmd_ssh(SWITCH_IP, "sudo sh reset_redfox0.sh")
 
 """
 Given a test configuration, return its filename

@@ -15,15 +15,22 @@ def clients_thread(params):
 	fixed_conns = list(params["fixed_conns"])
 	m_m_rates = list(params["m_m_rates"])
 	e_f_rates = list(params["e_f_rates"])
+	list_users = list(params["list_users"])
 
-	host_index = 0
-	for host in sorted(ADDRESSES):
+	for user_index in range(len(list_users)):
+
+		n_host = list_users[user_index] # n of clients to emulate on the pc
+		if n_host == 0:
+			continue
+
+		ip_address = (sorted(ADDRESSES))[user_index]
 		fixed_rtts_host = []
 		fixed_conns_host = []	
 		g_rates_host = []	
 		m_m_rates_host = []
 		e_f_rates_host = []
-		for i in range(list(params["list_users"])[host_index]):
+
+		for i in range(n_host):
 			fixed_rtts_host.append(fixed_rtts.pop(0))
 			fixed_conns_host.append(fixed_conns.pop(0))	
 			g_rates_host.append(g_rates.pop(0))
@@ -43,8 +50,7 @@ def clients_thread(params):
 			",".join(e_f_rates_host),
 			params["num_bands"], params["do_symm"])
 
-		cmd_ssh_bg(host, str_ssh)	
-		host_index += 1
+		cmd_ssh_bg(ip_address, str_ssh)	
 
 def start_test(
 		folder, cookie, do_save, do_visualize,
@@ -59,7 +65,7 @@ def start_test(
 	killall("xterm")
 	killall("bwm-ng")	
 	reset_switch()
-	reset_hosts()
+	reset_pcs()
 	for host in ADDRESSES:
 		cmd("scp *.py redfox@{}:~".format(host))	
 		cmd("scp *.sh redfox@{}:~".format(host))
@@ -244,9 +250,27 @@ def start_test(
 	Set the network
 	"""
 	limit_interface(vr_limit, "eth0")
-	for host in sorted(ADDRESSES):
-		str_ssh = "python create_ovs_and_veths.py -s{}".format(host)
-		cmd_ssh(host, str_ssh)
+
+	i = 0
+	for ip_address in sorted(ADDRESSES):
+		if list_users[i] > 0:
+			str_ssh = "python create_ovs_and_veths.py -s{}".format(ip_address)
+			cmd_ssh(ip_address, str_ssh)
+		i += 1
+
+	if switch_type == UGUALE:
+		# Start the controller
+		cmd_ssh_bg(SWITCH_IP, 
+			"sudo ryu-manager /home/redfox/controller_code/uguale.py")
+		time.sleep(2)
+
+		# Put the switch in UGUALE mode
+		cmd_ssh(
+			SWITCH_IP,  
+			"python config_ovs_uguale.py -c{} -q{} -n{}".format(
+				"127.0.0.1:6633",
+				100,
+				MAX_NUM_BANDS))
 
 	try:
 		for repetition in range(repetitions):
@@ -262,41 +286,31 @@ def start_test(
 
 				# ---------------------- CONFIGURE SWITCH ----------------------#
 
-				killall("iperf")
-				killall("xterm")
-				killall("bwm-ng")
-				reset_switch()
+				# killall("iperf")
+				# killall("xterm")
+				# killall("bwm-ng")
 
-				if configuration["switch_type"]==STANDALONE:
+				print("Executing {} ...".format(instance_name))
+				print configuration
 
-					# Set the queuelen
+				print "Configuring queues on the switch"
+				if configuration["switch_type"]==STANDALONE:					
 					cmd_ssh(
 						SWITCH_IP, 
 						"sudo sh set ovs_standalone_queues.sh {}".format(configuration["queuelen"]))
 
 				elif configuration["switch_type"]==UGUALE:
-
-					# Start the controller
-					cmd_ssh_bg(SWITCH_IP, 
-						"sudo ryu-manager /home/redfox/controller_code/uguale.py")
-					time.sleep(2)
-
-					# Put the switch in UGUALE mode
 					cmd_ssh(
 						SWITCH_IP,  
-						"python config_ovs_uguale.py -c{} -q{} -n{}".format(
-							"127.0.0.1:6633",
+						"python set_ovs_uguale_queues.py -q{} -n{}".format(
 							configuration["queuelen"],
-							configuration["num_bands"]))
-					time.sleep(4)
-
-				print("Executing {} ...".format(instance_name))
+							MAX_NUM_BANDS))
 
 				for curr_try in range(MAX_TRIES):
 					print "Try number {}...".format(curr_try)
-					killall("iperf")
-					killall("xterm")
-					killall("bwm-ng")
+					# killall("iperf")
+					# killall("xterm")
+					# killall("bwm-ng")
 
 					configuration["start_ts"] = time.time()+SYNC_TIME
 					clients=threading.Thread(target=clients_thread, args=(configuration,))
@@ -304,6 +318,8 @@ def start_test(
 
 					tcp_ports = range(FIRST_TCP_PORT, FIRST_TCP_PORT+max(list_users))
 					udp_ports = []
+
+					print "Starting the server"
 					data = ps.run_server(
 						"eth0", tcp_ports, udp_ports,
 						interactive=False, 
@@ -325,21 +341,27 @@ def start_test(
 							# append results to CSV
 							stats = vr.get_stats(test)
 							append_to_csv(configuration, stats)
+							# transfer to luca
+							time.sleep(5)
+							transf_str = "scp {} luca@192.168.200.200:~/Dropbox/lucab/codes/bitbucket_codes/redfox14/{}/".format(
+								file_name, folder)
+							print "Executing {}".format(transf_str)
+							cmd(transf_str)
 						break # exit from current tries
 					else:
 						print "Errors in data, test failed"
 						if curr_try == MAX_TRIES-1:
 							print "Test failed too many times... skipping to next test!"
 							append_to_csv(configuration, [])
-	except (KeyboardInterrupt):
+	except (KeyboardInterrupt, SystemExit):
 		print "Test interrupted"
 	finally:
 		print "Test terminated"
 		reset_switch()
-		reset_hosts()
+		reset_pcs()
 		killall("iperf")
-		killall("xterm")
-		killall("bwm-ng")
+		# killall("xterm")
+		# killall("bwm-ng")
 		limit_interface("1g", "eth0")
 
 
@@ -449,7 +471,7 @@ def main(argv):
 
 	n_users = sum(list_users)
 
-	if ((len(range_rtts)==0 and len(list_rtts)==0) # no rtt given
+	if((len(range_rtts)==0 and len(list_rtts)==0) # no rtt given
 	or (len(range_conns)==0 and len(list_conns)==0) # no conns given
 	or (len(range_conns)>0 and len(range_conns)!=2) # range must have 2 boundaries
 	or (len(range_rtts)>0 and len(range_rtts)!=2)  # range must have 2 boundaries
@@ -471,7 +493,13 @@ def main(argv):
 		print help_string
 		sys.exit(2)	
 
-	print (folder, cookie, do_save, do_visualize,
+	if max(list_num_bands)>MAX_NUM_BANDS:
+		print "The maximim number of bands is {}".format(MAX_NUM_BANDS)
+		print help_string
+		sys.exit(2)	
+
+	print(
+		folder, cookie, do_save, do_visualize,
 		range_conns, list_conns, range_rtts, list_rtts, list_users,
 		vr_limit, list_markers,
 		list_queuelen, switch_type,
