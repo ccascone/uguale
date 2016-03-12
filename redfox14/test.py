@@ -61,9 +61,6 @@ def start_test(
 		list_free_b, list_do_comp_rtt, do_symm):
 
 	# ------------------------------------ RESET THE NETWORK --------------------------------
-	killall("iperf")
-	killall("xterm")
-	killall("bwm-ng")	
 	reset_switch()
 	reset_pcs()
 	for host in ADDRESSES:
@@ -74,6 +71,16 @@ def start_test(
 	repetitions = 1
 	n_users = sum(list_users)
 	tech = TECH_OVS
+
+	if len(list_conns)>0:
+		do_use_conns_list = True
+	else:
+		do_use_conns_list = False
+
+	if len(list_rtts)>0:
+		do_use_rtts_list = True
+	else:
+		do_use_rtts_list = False
 
 	# ------------------------------------ PREPARE TEST CONFIGURATIONS --------------------------------
 	"""
@@ -114,35 +121,9 @@ def start_test(
 									print "Only even num_bands, skip test"
 									continue
 
-							# ------------------------ RTTS ----------------------
-							"""
-							If the range has zero difference, all users have the same rtt
-							If not, RTTs will be equally distributed in the range
-							"""	
-							fixed_rtts = []
-							if len(range_rtts)>0:
-								delta_rtts = range_rtts[1]-range_rtts[0]
-								if delta_rtts == 0:
-									fixed_rtts = [range_rtts[0]]*n_users
-								else:
-									step = delta_rtts/float(n_users-1)
-									for i in range(n_users):
-										fixed_rtts.append(range_rtts[0]+(i*step))	
-									random.shuffle(fixed_rtts)
-							else:
-								fixed_rtts = list_rtts
-								range_rtts = [min(list_rtts), max(list_rtts)]
-
-							if (len(set(fixed_rtts))==1 and 
-								len(list_do_comp_rtt)>1 and 	
-								do_comp_rtt):
-								print "Useless RTT compensation, skip test"
-								continue
-
 							# ----------------TCP CONNECTIONS ---------------
-
 							fixed_conns = []
-							if len(range_conns)>0:
+							if not do_use_conns_list:
 								delta_conns = range_conns[1]-range_conns[0]
 								if delta_conns == 0:
 									fixed_conns = [range_conns[0]]*n_users
@@ -162,7 +143,32 @@ def start_test(
 									random.shuffle(fixed_conns)	
 							else:
 								fixed_conns = list_conns
-								range_conns = [min(list_conns), max(list_conns)]									
+								range_conns = [min(list_conns), max(list_conns)]	
+
+							# ------------------------ RTTS ----------------------
+							"""
+							If the range has zero difference, all users have the same rtt
+							If not, RTTs will be equally distributed in the range
+							"""	
+							fixed_rtts = []
+							if not do_use_rtts_list:
+								delta_rtts = range_rtts[1]-range_rtts[0]
+								if delta_rtts == 0:
+									fixed_rtts = [range_rtts[0]]*n_users
+								else:
+									step = delta_rtts/float(n_users-1)
+									for i in range(n_users):
+										fixed_rtts.append(range_rtts[0]+(i*step))	
+									random.shuffle(fixed_rtts)
+							else:
+								fixed_rtts = list_rtts
+								range_rtts = [min(list_rtts), max(list_rtts)]
+
+							if (len(set(fixed_rtts))==1 and 
+								len(list_do_comp_rtt)>1 and 	
+								do_comp_rtt):
+								print "Useless RTT compensation, skip test"
+								continue
 
 							# --------------- BANDS ASSIGNMENT ----------------
 
@@ -286,10 +292,6 @@ def start_test(
 
 				# ---------------------- CONFIGURE SWITCH ----------------------#
 
-				# killall("iperf")
-				# killall("xterm")
-				# killall("bwm-ng")
-
 				print("Executing {} ...".format(instance_name))
 				print configuration
 
@@ -308,9 +310,6 @@ def start_test(
 
 				for curr_try in range(MAX_TRIES):
 					print "Try number {}...".format(curr_try)
-					# killall("iperf")
-					# killall("xterm")
-					# killall("bwm-ng")
 
 					configuration["start_ts"] = time.time()+SYNC_TIME
 					clients=threading.Thread(target=clients_thread, args=(configuration,))
@@ -359,9 +358,6 @@ def start_test(
 		print "Test terminated"
 		reset_switch()
 		reset_pcs()
-		killall("iperf")
-		# killall("xterm")
-		# killall("bwm-ng")
 		limit_interface("1g", "eth0")
 
 

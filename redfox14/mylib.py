@@ -17,7 +17,7 @@ NUM_VETHS = 10
 
 """
 The maximum number of prio classes is 16
-but only 15 are available (because the first is "fake")
+but only 15 are available
 """
 MAX_NUM_BANDS = 15 # maximum number of DSCP and queues
 
@@ -61,7 +61,7 @@ IPERF_REPORT_INTERVAL = 1
 DURATION = 180 # duration of tests
 MAX_TRIES = 1 # max failed tries to declare a test/configuration failed
 SYNC_TIME = 10 # after this time from t0(server) users start iperf connections
-RESULTS_CSV_FILENAME = "results.csv"
+RESULTS_CSV_FILENAME = "results_march2016.csv"
 
 # --------------------- VALIDITY PARAMETERS ------------------
 RECORD_BEGIN = 35 # seconds to discard at the begin
@@ -95,13 +95,13 @@ INSTANCE_NAME_PARAMS = [
 
 # ----------------- CSV COLUMNS ------------------
 
-# Columns for the CSV file about test confguration (full_names)
+# Columns for the CSV file about test configuration (full_names)
 PARAMS_COLUMNS = [
-	"start_ts", "cookie", "switch_type", "bn_cap", "free_b", 
-	"vr_limit", "n_users", "range_rtts", "range_conns", 
-	"duration", "markers", "num_bands", "do_comp_rtt", 
-	"strength", "guard_bands", 
-	"queuelen", "tech"]
+	"start_ts", "cookie", "switch_type", "bn_cap", "free_b",
+	"vr_limit", "n_users", "range_rtts", "range_conns",
+	"duration", "markers", "num_bands", "do_comp_rtt",
+	"strength", "guard_bands", "queuelen", "tech",	
+	"list_users", "fixed_conns", "fixed_rtts", "do_symm"]
 
 # Columns for the CSV file about test statistics (full_names)
 STATS_COLUMNS = [
@@ -120,12 +120,28 @@ PARAMS_BRIEF = [
 	"switch_type", "markers", "queuelen", 
 	"free_b", "num_bands", "guard_bands", "do_comp_rtt"
 ]
-
 # Names of PARAMS_BRIEF to be printed
 PARAMS_BRIEF_SHOW = [
 	"Switch type", "Marking type", "Switch queue lenght", 
 	"Unused capacity", "N. of bands", "N. of guard bands", "RTT compensation"
 ]
+
+
+# subset of PARAMS_COLUMNS (if symmetric bands are used)
+PARAMS_BRIEF_SYMM = [
+	"switch_type", "markers", "queuelen", 
+	"num_bands", "do_symm", "guard_bands", "do_comp_rtt"
+]
+# Names of PARAMS_BRIEF to be printed
+PARAMS_BRIEF_SYMM_SHOW = [
+	"Switch type", "Marking type", "Switch queue lenght", 
+	"N. of bands", "Symmetric bands", "N. of guard bands", "RTT compensation"
+]
+
+# subset of PARAMS_COLUMNS (if standalone switch is used)
+PARAMS_BRIEF_STANDALONE = ["switch_type", "queuelen"]
+# Names of PARAMS_BRIEF to be printed
+PARAMS_BRIEF_STANDALONE_SHOW = ["Switch type", "Switch queue lenght"]
 
 # subset of STAT_COLUMNS
 STATS_BRIEF = [
@@ -158,10 +174,6 @@ def append_to_csv(params, stats):
 	for key in PARAMS_COLUMNS:
 		if key in params:
 			value = str(params[key])
-		elif key not in params and key == "num_bands":
-			value = 8 
-		elif key not in params and key == "strength":
-			value = 1 
 		else:
 			value = "unknown"
 		rows_to_write[-1].append(value)

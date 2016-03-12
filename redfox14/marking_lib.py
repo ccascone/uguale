@@ -36,17 +36,21 @@ def get_rates(g_rate, bn_cap, m_m_rate, num_bands, do_symm, e_f_rate):
 	rates = {}
 
 	if do_symm:
-		nc2 = num_bands - 2
-		delta = 2 * float(m_m_rate - e_f_rate) / float(nc2)
 
-		thr = e_f_rate - float((nc2 / 2) * delta)
-		dscp = 1
-		rates[thr] = 1 
+		if num_bands == 2:
+			rates[e_f_rate] = 1
+		else:
+			nc2 = num_bands - 2
+			delta = 2 * float(m_m_rate - e_f_rate) / float(nc2)
 
-		for i in range(nc2):
-			thr += delta
-			dscp += 1
-			rates[thr] = dscp
+			thr = e_f_rate - float((nc2 / 2) * delta)
+			dscp = 1
+			rates[thr] = 1 
+
+			for i in range(nc2):
+				thr += delta
+				dscp += 1
+				rates[thr] = dscp
 
 		rates[bn_cap] = num_bands 
 
@@ -136,6 +140,9 @@ def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands,
 	mfr = g_max + ((free_b * C) / float(n_users)) # maximum fair rate at which an user will converge
 
 	if do_symm:
+		if num_bands == 2:
+			return mfr
+
 		amplitude = (C / 10.0) * guard_bands
 		amplitude = min(mfr, amplitude)
 		amplitude = min(C - mfr, amplitude)

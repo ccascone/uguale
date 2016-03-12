@@ -19,18 +19,24 @@ def test_is_valid(test):
 	min_val = 100 # bit/s
 	max_small_samples = 0.10
 
+	expected_reports = float(params["duration"] - RECORD_BEGIN - RECORD_END)/IPERF_REPORT_INTERVAL
+	max_noshow_reports = float(max_noshow_seconds) / IPERF_REPORT_INTERVAL
+
 	flag = True
 
 	if not data:
 		print "Data is None"
 		return False
 
+	# Check if the SUM process (bwm-ng) has worked
+	if len(data["SUM"]["total"]["t"])< (expected_reports/2.0):
+		print "No SUM process"
+		return False
+
+	# Check if there are all iperf users
 	if (len(data)-1)<params["n_users"]:
 		print "ERROR: Expected {} active users, found {}".format(params["n_users"], len(data)-1) 
 		flag = False
-
-	expected_reports = float(params["duration"] - RECORD_BEGIN - RECORD_END)/IPERF_REPORT_INTERVAL
-	max_noshow_reports = float(max_noshow_seconds) / IPERF_REPORT_INTERVAL
 
 	for src in data:
 		if src!="SUM":
@@ -280,64 +286,88 @@ def get_text(params, stat, brief=False):
 	separator = "\n"
 	text = ""
 
-	# connections
+	"""
+	1st PARAGRAPH: user: #c, rtt
+	"""
 	users = map(lambda x: x+1, stat["ids"])
 	text += "USERS\n"
 	for i in range(len(users)):
 		text += "User {}: {}c, {}ms\n".format(
 			users[i], int(params["fixed_conns"][i]), int(params["fixed_rtts"][i]))
 
-	# parameters
+	"""
+	2nd PARAGRAPH: list of test parameters 
+
+	params_to_show  : list of parameters to be considered
+	params_to_show2 : list of names to print for the considered parameters 
+	"""
 	if brief:
-		params_to_show = PARAMS_BRIEF
-		params_to_show2 = PARAMS_BRIEF_SHOW
-	else:
+		if params["do_symm"] and params["switch_type"] == UGUALE:
+			params_to_show = PARAMS_BRIEF_SYMM
+			params_to_show2 = PARAMS_BRIEF_SYMM_SHOW
+		elif params["switch_type"] == STANDALONE:
+			params_to_show = PARAMS_BRIEF_STANDALONE
+			params_to_show2 = PARAMS_BRIEF_STANDALONE_SHOW
+		else:
+			params_to_show = PARAMS_BRIEF
+			params_to_show2 = PARAMS_BRIEF_SHOW
+
+	else: # print every parameter in raw format
 		params_to_show = params.keys()
 		params_to_show2 = params.keys()
 
 	text += "\nCONFIGURATION\n"	
 	i = 0
 	for param in params_to_show:
-		if param != "fixed_conns" and param != "fixed_rtts":
 
-			if param not in params:
-				value == "unknown"
-			else:
-				value = params[param]
+		# params already considered in the 1st paragraph
+		if params in ["fixed_conns", "fixed_rtts"]:
+			continue
 
-			"""
-			Adjust parameter for unusual configurations
-			"""
-			if params["switch_type"] == STANDALONE:
-				if param == "markers":
-					value = NO_MARKERS
-				elif param == "guard_bands":
-					value = -1
-				elif param == "do_comp_rtt":
-					value = False
-				elif param == "free_b":
-					value = 0.0
-				elif param == "num_bands":
-					value == 1
+		if param not in params:
+			value == "unknown"
+		else:
+			value = params[param]
 
-			if params["switch_type"] == UGUALE and param not in params and param == "num_bands":
-				value = 8
-
-			if param == "do_comp_rtt" and len(set(params["fixed_rtts"]))==1:
+		"""
+		Modify parameter value for unusual configurations
+		"""
+		if params["switch_type"] == STANDALONE:
+			if param == "markers":
+				value = NO_MARKERS
+			elif param == "guard_bands":
+				value = -1
+			elif param == "do_comp_rtt":
 				value = False
+			elif param == "free_b":
+				value = 0.0
+			elif param == "num_bands":
+				value == 1
 
-			param2 = params_to_show2[i]
-			if (isinstance(value, list) or isinstance(value, tuple)) and len(value)>2 and len(set(value))==1:
-				text += "{}: [{}]*{}{}".format(param2, value[0], len(value), separator)
-			else:
-				unity = ""
-				if param in ["queuelen"]:
-					unity = "pkt"
+		# compatibility for old tests
+		if params["switch_type"] == UGUALE and "num_bands" not in params:
+			value = 8
 
-				text += separator.join(tw.wrap("{}: {} {}".format(param2, value, unity), text_width)) + separator
+		if param == "do_comp_rtt" and len(set(params["fixed_rtts"]))==1:
+			value = False
+
+		param2 = params_to_show2[i] # parameter's name to print
+
+		# abbreviate lists of identical elements 
+		if ((isinstance(value, list) or isinstance(value, tuple)) and 
+			len(value)>2 and 
+			len(set(value))==1):
+			text += "{}: [{}]*{}{}".format(param2, value[0], len(value), separator)
+		else:
+			unity = ""
+			if param in ["queuelen"]:
+				unity = "pkt"
+			text += separator.join(tw.wrap("{}: {} {}".format(param2, value, unity), text_width)) + separator
 		i+=1
 
-	# statistics
+	"""
+	3rd paragraph: list of statistics
+	"""
 	text += "\nSTATISTICS\n"
 	i=0
 	for key in STATS_BRIEF:
