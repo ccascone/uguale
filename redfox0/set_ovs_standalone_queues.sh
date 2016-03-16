@@ -1,7 +1,5 @@
 # PARAMETER1: queuelen
-
 # set a pfifo on interfaces and set the queuelen
-
 for i in 1 2 3 4
 do
     ifconfig eth$i txqueuelen $1

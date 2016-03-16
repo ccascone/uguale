@@ -7,9 +7,8 @@ from mylib import *
 """
 Delete all qdiscs from an interface
 """
-def clean_interface(intf):
+def remove_qdiscs(intf):
 	sudo_cmd("tc qdisc del dev {} root".format(intf))
-
 
 """
 Print the tc configuration (qdiscs, classes and filters)
@@ -27,7 +26,6 @@ def print_tc_configuration(intf, qdiscs=[]):
 			sudo_cmd("tc filter show dev {} parent {}:".format(intf, parent))
 
 # ------------------------------------- DSMARK --------------------------------------#
-
 """
 Creates a DSMARK qdisc
 """
@@ -46,12 +44,13 @@ def change_dsmark_class(intf, dsmark_qdisc_id, dsmark_class_id, dscp):
 	sudo_cmd(command)
 
 """
-Add a tc filter (that send packets to a certain DSMARK class)
+Add a tc filter (that send packets to a certain DSMARK class
 """
-def add_dsmark_filter(intf, dsmark_qdisc_id, prio, rate, burst, mtu, dsmark_class_id, protocol="", dport=0, fw=-1):
+def add_dsmark_filter(intf, dsmark_qdisc_id, prio, 
+	rate, burst, mtu, dsmark_class_id, protocol="", dport=0, fw=-1):
 
-	match_field, police_field = "", ""
-
+	# Apply the filter only to certain packets
+	match_field = ""
 	if protocol!="" and dport!=0: # match a destination port
 		match_field = "u32 match ip dport {} 0xffff".format(dport)		
 	elif fw!=-1: # match a firewall mark
@@ -59,21 +58,20 @@ def add_dsmark_filter(intf, dsmark_qdisc_id, prio, rate, burst, mtu, dsmark_clas
 	else: # match all
 		match_field = "u32 match ip protocol 0 0"	
 
-	# if a policer id defined
+	# Match on the measured rate
+	police_field = ""
 	if (rate>0 and burst>0 and mtu>0):
 		police_field = "police rate {}bit burst {} mtu {} continue ".format(
 			rate, burst, mtu)
 		# note the space at the and of the string
 
 	command = "tc filter add dev {} parent {}: protocol ip prio {} {} {}classid {}:{}".format(
-		intf, dsmark_qdisc_id, prio, match_field, police_field, dsmark_qdisc_id, dsmark_class_id)
-
+		intf, dsmark_qdisc_id, prio, match_field, police_field, 
+		dsmark_qdisc_id, dsmark_class_id)
 	print command
-
 	sudo_cmd(command)
 
 # ------------------------------------- NETEM --------------------------------------#
-
 """
 Add a netem qdisc to an interface
 """

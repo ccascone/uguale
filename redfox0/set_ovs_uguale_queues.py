@@ -1,10 +1,7 @@
 #!/usr/bin/python
-
 import sys, getopt, subprocess
 
-"""
-Execute a command in the terminal
-"""
+# Execute a command in the terminal
 def sudo_cmd(command):
 	subprocess.call("sudo {}".format(command), shell=True) 
 

@@ -3,30 +3,19 @@
 Manage the assignment of bands and 
 creates the dict of rates (rate: DSCP)
 """
-
 from mylib import *
-
 """
-example of rate dict (3 bands):
-
-------------- <---4000
-|			|
-|	3		|
-------------- <---2000
-|	2		|
-------------- <---1000
-|	1		|
--------------
-
-rates={
-	1000 : 1
-	2000 : 2
-	4000 : 3
-}
-
-threshold : DSCP
+example of rate dict (bn_cap = 4000, num_bands = 3)
+-------------- <---4000
+|			 |
+|	DSCP = 3 |
+-------------- <---2000   ===> rates = {1000 : 1,
+|	DSCP = 2 |							2000 : 2, 
+-------------- <---1000 				4000 : 3 }
+|	DSCP = 1 |
+--------------
+So the key is the threshold and the value is the DSCP
 """
-
 
 """
 Return the dict of rates
@@ -38,21 +27,33 @@ def get_rates(g_rate, bn_cap, m_m_rate, num_bands, do_symm, e_f_rate):
 	if do_symm:
 
 		if num_bands == 2:
-			rates[e_f_rate] = 1
+			rates[e_f_rate] = 1			
+			rates[bn_cap] = 2 
 		else:
-			nc2 = num_bands - 2
-			delta = 2 * float(m_m_rate - e_f_rate) / float(nc2)
+			num_symm_bands = num_bands - 2 # number of equispaced bands
+			semi_symm_width = m_m_rate - e_f_rate
+			delta = semi_symm_width / (num_symm_bands / 2.0) # width of each symmetric band
 
-			thr = e_f_rate - float((nc2 / 2) * delta)
-			dscp = 1
-			rates[thr] = 1 
+			"""
+			Find the first threshold (thr) for symmetric bands.
+			If the first threshold is too small,
+			aggregate it to the next one
+			"""
+			thr = e_f_rate - semi_symm_width
 
-			for i in range(nc2):
+			if thr >= MIN_BAND_WIDTH:
+				dscp = 1
+				rates[thr] = 1 
+			else: # case 2
+				dscp = 0
+				thr = max(thr, 0)
+
+			for i in range(num_symm_bands):
 				thr += delta
 				dscp += 1
 				rates[thr] = dscp
 
-		rates[bn_cap] = num_bands 
+			rates[bn_cap] = dscp + 1 
 
 	else:
 		delta = float(m_m_rate) / (num_bands - 1)
@@ -70,12 +71,16 @@ def get_rates(g_rate, bn_cap, m_m_rate, num_bands, do_symm, e_f_rate):
 
 
 """
-Parameters must be numbers, return string
+NOTE ON PARAMS: 
+- g_rates: list of rates (strings)
+- free_b: 0 < X < 1
+- C : bn_cap as integer 
+- if guard_bands == -1, do not use MMR 
+	==> mmr = (num_bands-1)*(C/float(num_bands))
+	==> Divide C in num_bands and return the rate of the penultimate
 
-if guard_bands == -1, do not use MMR --> mmr = (num_bands-1)*(C/float(num_bands))
 
-Es. guard bands = 2
-
+Example (num_bands = 8, guard bands = 2, do_symm = False)
 --------- <-- bn_cap
 |		|
 |		|
@@ -86,7 +91,7 @@ Es. guard bands = 2
 |	7	|
 ---------
 |	6	|
---------- <--mfr MAXIMUM FAIR RATE (maximum rate at wich an user will converge)
+--------- <--mfr MAXIMUM FAIR RATE (maximum rate at wich an user should converge)
 |	5	|
 ---------
 |	4	|
@@ -98,65 +103,94 @@ Es. guard bands = 2
 |	1	|
 ---------
 
-Symmetric
-
----------
+Example (num_bands = 8, do_symm = True, symm_width)
+--------- <--- bn_cap or C
 |		|
 |	8	|
 |		|
---------- <--- EFR + amplitude = b
-|	7	|
----------
-|	6	|
----------
-|	5	|
---------- <---- EFR
-|	4	|
----------
-|	3	|
----------
-|	2	|
---------- <--- EFR - amplitude = a
+--------- <--- b = EFR + symm_width/2 = MMR 	|
+|	7	|										|
+---------										|
+|	6	|										|
+---------										|
+|	5	|										|
+--------- <---- EFR 							| = symmetric width
+|	4	|						 				|	
+---------						 				|
+|	3	|						 				|
+---------						 				|
+|	2	|						 				|
+--------- <--- a = EFR - symm_width/2 			|
 |		|
 |	1	|
 |		|
 ---------
-
-The space [a,b] is divided into num_bands-2 bands.
-Band 1 is assigned to what is under a
-Band num_bands is assigned to what is over b
+[a,b] is divided into num_bands-2 bands.
+The band #1 is assigned to rates lower than a
+The band #num_bands is assigned to rates bigger than b
 Since the EFR must be between two bands, 
 only even num_bands are expected.
 
-amplitude = (C/10)*guard_bands
-amplitude <= EFR
-amplitude <= C - EFR
-
+If the symmetric interval cannot be applied
+(because the width is greater than 2*EFR)
+In this case:
+- the symmetric width is truncated to 2*EFR 
+- band#1 is the first band used anyway
+- band#num_bands will not be used (the last will be num_bands-1)
+Example (num_bands = 8, do_symm = True, symm_width/2 >= EFR)
+--------- <--- bn_cap or C
+|		|
+|		|
+|		|
+|	7	|
+|		|
+|		|
+|		|
+--------- <--- b = 2*EFR = MMR 	|
+|	6	|						|
+---------						|
+|	5	|						|
+---------						|
+|	4	|						|
+--------- <---- EFR 			| = 2 * EFR
+|	3	|						|						 	
+---------						|
+|	2	|						| 
+---------						|
+|	1	|						| 
+--------- <--- a = 0			|
 """
-def get_marker_max_rate(g_rates, free_b, C, n_users, guard_bands, 
-	num_bands, do_symm=False):
-
-	g_max = max(map(rate_to_int, g_rates)) # maximum guaranteed rate [int] 
-	mfr = g_max + ((free_b * C) / float(n_users)) # maximum fair rate at which an user will converge
+def get_marker_max_rate(C, n_users, g_rates, e_f_rates, 
+	num_bands, guard_bands, do_symm, symm_width): 
 
 	if do_symm:
-		if num_bands == 2:
-			return mfr
+		efr = min(map(rate_to_int, e_f_rates))
 
-		amplitude = (C / 10.0) * guard_bands
-		amplitude = min(mfr, amplitude)
-		amplitude = min(C - mfr, amplitude)
-		return mfr + amplitude
+		if num_bands == 2:
+			return efr
+
+		semi_amp = (rate_to_int(symm_width)) / 2.0
+
+		if semi_amp < efr: # The symmetric width is contained
+			return efr + semi_amp
+		else: # The symmetric width must be reduced
+			return 2 * efr 
+
+	"""
+	Maximum fair rate at which an user will converge.
+	When users have the same g_u, this is the EFR
+	"""  
+	mfr = max(map(rate_to_int, e_f_rates))
 
 	# If the mmr is not used, c must be divided simply in num_bands bands
-	if guard_bands == -1 or guard_bands>=num_bands:
+	if guard_bands == -1 or guard_bands >= num_bands:
 		return (num_bands - 1) * (C / float(num_bands))
 
 	if guard_bands == 0:
 		return mfr
 
 	# normal mmr case
-	if (num_bands - guard_bands - 1)>0:
+	if (num_bands - guard_bands - 1) > 0:
 		delta = mfr / float(num_bands - guard_bands - 1)
 	else:
 		delta = mfr
@@ -226,7 +260,7 @@ find the maximum DSCP assigned in the dict
 def max_dscp(rates):
 	maxd = 0
 	for rate in rates:
-		if rates[rate]>maxd:
+		if rates[rate] > maxd:
 			maxd = rates[rate]
 	return int(maxd)
 
@@ -243,16 +277,12 @@ def print_rates(rates, bn_cap):
 
 
 """
-Convert the dict of rates in a sorted list of rates expressed in byte/s
-Used for python marker
-[2000-3000] --> 3
-[1000-2000]	--> 2
-[0-1000] 	--> 1
+Verify:
+import marking_lib as ml; C = 94100000; nb=2; nu = 6; efr= C/float(nu); 
+mmr=ml.get_marker_max_rate(C, nu, [], [efr]*nu, nb, 2 ,True); 
+rates = ml.get_rates(0,C,mmr,nb,True,efr); ml.print_rates(rates,C)
 
-es: {1000:1, 2000:2, 3000:3} ==> [0, 1000/8, 2000/8, 3000/8]
+import marking_lib as ml; C = 94100000; 
+nb=2; nu = 6; sw = "20.0m" 
+efr= C/float(nu); mmr=ml.get_marker_max_rate(C, nu, [], [efr]*nu, nb, 2 ,True, sw); rates = ml.get_rates(0,C,mmr,nb,True,efr); ml.print_rates(rates,C)
 """
-def rates_to_list_bytes(rates):
-	r = [0]
-	for rate in sorted(rates):
-		r.append(int(rate / 8.0))
-	return r

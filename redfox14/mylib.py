@@ -3,7 +3,6 @@ import numpy as np
 
 FNULL = open(os.devnull, "w")
 
-
 # --------------------- REFOX NETWORK IP ADDRESSES ------------------
 NETWORK_PREFIX = "192.168.200"
 NETWORK_PREFIX_16 = "192.168"
@@ -51,6 +50,8 @@ MARKING_TYPES = [NO_MARKERS, BUCKETS_MARKERS, IPTABLES_MARKERS]
 TECH_OVS = "ovs"
 TECH_NONE = "none"
 
+MIN_BAND_WIDTH = 10**6
+
 # --------------------- TEST PARAMETERS ------------------
 FIRST_TCP_PORT = 5001
 FIRST_UDP_PORT = 5201
@@ -61,7 +62,7 @@ IPERF_REPORT_INTERVAL = 1
 DURATION = 180 # duration of tests
 MAX_TRIES = 1 # max failed tries to declare a test/configuration failed
 SYNC_TIME = 10 # after this time from t0(server) users start iperf connections
-RESULTS_CSV_FILENAME = "results_march2016.csv"
+RESULTS_CSV_FILENAME = "results_symm.csv"
 
 # --------------------- VALIDITY PARAMETERS ------------------
 RECORD_BEGIN = 35 # seconds to discard at the begin
@@ -78,7 +79,7 @@ INSTANCE_NAME_PARAMS = [
 	["cookie", 			"test"	], 
 	["bn_cap", 			"cap"	], 
 	["free_b", 			"fb"	], 	
-	["n_users", 			"u"		], 
+	["n_users", 		"u"		], 
 	["range_rtts", 		"rtt"	], 
 	["range_conns", 	"conn"	], 
 	["duration", 		"d"		], 
@@ -87,10 +88,12 @@ INSTANCE_NAME_PARAMS = [
 	["guard_bands", 	"gb"	], 
 	["markers", 		"mr"	], 
 	["tech", 			"tk"	], 
-	["queuelen", 		"q"	], 
-	["switch_type", 		"t"		], 
-	["do_comp_rtt", 		"crtt"	], 
-	["strength", 		"s"		]
+	["queuelen", 		"q"		], 
+	["switch_type", 	"t"		], 
+	["do_comp_rtt", 	"crtt"	], 
+	["strength", 		"s"		],
+	["do_symm",			"ds"	],
+	["symm_width", 		"symw"	]
 ]
 
 # ----------------- CSV COLUMNS ------------------
@@ -101,7 +104,7 @@ PARAMS_COLUMNS = [
 	"vr_limit", "n_users", "range_rtts", "range_conns",
 	"duration", "markers", "num_bands", "do_comp_rtt",
 	"strength", "guard_bands", "queuelen", "tech",	
-	"list_users", "fixed_conns", "fixed_rtts", "do_symm"]
+	"list_users", "fixed_conns", "fixed_rtts", "do_symm", "symm_width"]
 
 # Columns for the CSV file about test statistics (full_names)
 STATS_COLUMNS = [
@@ -130,12 +133,12 @@ PARAMS_BRIEF_SHOW = [
 # subset of PARAMS_COLUMNS (if symmetric bands are used)
 PARAMS_BRIEF_SYMM = [
 	"switch_type", "markers", "queuelen", 
-	"num_bands", "do_symm", "guard_bands", "do_comp_rtt"
+	"num_bands", "do_symm", "symm_width"
 ]
 # Names of PARAMS_BRIEF to be printed
 PARAMS_BRIEF_SYMM_SHOW = [
 	"Switch type", "Marking type", "Switch queue lenght", 
-	"N. of bands", "Symmetric bands", "N. of guard bands", "RTT compensation"
+	"N. of bands", "Symm. bands", "Symm. width"
 ]
 
 # subset of PARAMS_COLUMNS (if standalone switch is used)
@@ -191,6 +194,7 @@ def append_to_csv(params, stats):
 
 """
 Conversion es. "45.5m"--> 45500000
+Conversion es. "45m"  --> 45000000	
 The rate can contain an integer.
 Return an int because a bitrate is always integer
 """
@@ -198,7 +202,7 @@ def rate_to_int(rate_str):
 	try:
 		return int(float(rate_str))
 	except ValueError:
-		regex_rate = re.compile('([0-9]{1,20}.[0-9]{1,20})([m,g,k]{0,1})')
+		regex_rate = re.compile('([0-9]{1,20}[.]{0,1}[0-9]{0,20})([m,g,k]{0,1})')
 		m = regex_rate.match(rate_str)
 		if m is not None:
 			num = float(m.groups()[0])
@@ -331,10 +335,15 @@ def optimal_queue_len(rtts, conns, C):
 	num_flows = np.sum(conns)
 	length_bit = (rtt_sec*C)/float(math.sqrt(num_flows))
 	length_pacc = int(length_bit/float(8*MTU)) # bit --> bytes --> packets
-	# print rtt_sec, num_flows, C, length_bit, length_pacc
-	length_pacc = max(num_flows*2, length_pacc) 
-	return min(length_pacc, 10000)
 
+	"""
+	Boundaries to the queue lenght
+	- at least 2 packets per flow
+	- maximum 10000 packets
+	"""
+	length_pacc = max(num_flows*2, length_pacc) 
+	length_pacc = min(length_pacc, 10000)
+	return length_pacc
 """
 Make an interface negotiate for 100Mbps or 1Gbps
 """

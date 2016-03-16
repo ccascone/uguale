@@ -25,16 +25,15 @@ RULE_PRIORITY_ARP = RULE_PRIORITY + 1
 RULE_PRIORITY_SSH = RULE_PRIORITY - 1
 
 PC_IDS = [1, 2, 3, 4, 98]
+PORTS = [1, 2, 3, 4, 5] 
+EXTERNAL_PORT = 5
 HOST_IDS = [1, 2, 3]
 SERVER_ID = 4
 SWITCH_ID = 98
 STARTING_IDS = [110, 120, 130]
-PORTS = [1, 2, 3, 4, 5] 
-EXTERNAL_PORT = 5
 
-
-ip_eth_type = 0x800
-arp_eth_type = 0x0806
+IP_ETH_TYPE = 0x800
+ARP_ETH_TYPE = 0x0806
 
 MAX_NUM_BANDS = 16 # maximum number of DSCP and queues
 NUM_VETHS = 10 # number of addresses for each host
@@ -73,11 +72,10 @@ class FairTestApp(app_manager.RyuApp):
 		# LOG.info("Configuring switch %d..." % datapath.id)
 
 		# --------------------- ARP RULES ------------------------#
-		match = parser.OFPMatch(eth_type=arp_eth_type)
+		match = parser.OFPMatch(eth_type=ARP_ETH_TYPE)
 		actions = [parser.OFPActionOutput(ofp.OFPP_FLOOD)]
 		inst = [parser.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions)]
 		self.add_flow(datapath=datapath, match=match, instructions=inst, priority=RULE_PRIORITY+1)
-
 
 		# --------------------- REAL HOSTS ------------------------
 		# Rules to let real hosts communicate
@@ -85,7 +83,7 @@ class FairTestApp(app_manager.RyuApp):
 			for i_src in range(len(PC_IDS)):
 				if i_dst!=i_src:
 					match = parser.OFPMatch(
-						eth_type=ip_eth_type,
+						eth_type=IP_ETH_TYPE,
 						ipv4_src="{}.{}".format(NETWORK_PREFIX, PC_IDS[i_src]),
 						ipv4_dst="{}.{}".format(NETWORK_PREFIX, PC_IDS[i_dst]))
 					if PC_IDS[i_dst] == SERVER_ID:		
@@ -100,7 +98,7 @@ class FairTestApp(app_manager.RyuApp):
 			for em_id in EMULATED_IDS[pc_id]:
 				# ----------- SERVER-->EMULATED ------------
 				match = parser.OFPMatch(
-					eth_type=ip_eth_type, 
+					eth_type=IP_ETH_TYPE, 
 					ipv4_src="{}.{}".format(NETWORK_PREFIX, SERVER_ID),
 					ipv4_dst="{}.{}".format(NETWORK_PREFIX, em_id))
 				actions = [parser.OFPActionOutput(pc_id)]
@@ -109,7 +107,7 @@ class FairTestApp(app_manager.RyuApp):
 				# ------------ EMULATED-->SERVER-------------- 
 				for dscp in range(1, MAX_NUM_BANDS+1): # i=1-->8			
 					match = parser.OFPMatch(
-						eth_type=ip_eth_type,
+						eth_type=IP_ETH_TYPE,
 						ipv4_src="{}.{}".format(NETWORK_PREFIX, em_id),
 						ipv4_dst="{}.{}".format(NETWORK_PREFIX, SERVER_ID),
 						ip_dscp=dscp)		
@@ -120,12 +118,10 @@ class FairTestApp(app_manager.RyuApp):
 						actions=actions,
 						priority=RULE_PRIORITY)
 
-
 		# --------------------- SSH RULES ------------------------#
-
 		# R4 ---> OUT
 		match = parser.OFPMatch(
-			eth_type=ip_eth_type, 
+			eth_type=IP_ETH_TYPE, 
 			ipv4_src="{}.{}".format(NETWORK_PREFIX, SERVER_ID)
 		)
 		actions = [parser.OFPActionOutput(EXTERNAL_PORT)]
@@ -135,7 +131,7 @@ class FairTestApp(app_manager.RyuApp):
 
 		# R4 <--- OUT
 		match = parser.OFPMatch(
-			eth_type=ip_eth_type, 
+			eth_type=IP_ETH_TYPE, 
 			in_port=EXTERNAL_PORT
 		)
 		actions = [parser.OFPActionOutput(SERVER_ID)]
@@ -145,7 +141,7 @@ class FairTestApp(app_manager.RyuApp):
 
 		# SWITCH ---> OUT
 		match = parser.OFPMatch(
-			eth_type=ip_eth_type, 
+			eth_type=IP_ETH_TYPE, 
 			ipv4_dst="{}.{}".format(NETWORK_PREFIX, 200)
 		)
 		actions = [parser.OFPActionOutput(EXTERNAL_PORT)]
@@ -153,10 +149,9 @@ class FairTestApp(app_manager.RyuApp):
 		self.add_flow(datapath, match, 
 			instructions=inst, priority=RULE_PRIORITY_SSH)
 
-
 	# ----------------------------- ADD FLOW RULE --------------------------------------
 
-	def add_flow(self, datapath, match, table_id=0, priority=0, actions = None,  instructions=None):
+	def add_flow(self, datapath, match, table_id=0, priority=0, actions=None, instructions=None):
 		ofp = datapath.ofproto
 		parser = datapath.ofproto_parser
 

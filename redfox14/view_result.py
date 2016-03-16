@@ -393,20 +393,20 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 		"distr": {
 			"position"	: 221, 
 			"title"		: "(a)", 
-			"xlabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity", 
+			"xlabel"	: "Distance from OFR normalized w.r.t. bottleneck capacity", 
 			"ylabel"	: "Discrete distribution"
 		}, 
 		"gen": {
 			"position"	: 222, 
 			"title"		: "(b)", 
 			"xlabel"	: "User ID", 
-			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
+			"ylabel"	: "Distance from OFR normalized w.r.t. bottleneck capacity"
 		}, 
 		"rtts": {
 			"position"	: 223, 
 			"title"		: "(c)", 
 			"xlabel"	: "RTT [ms]", 
-			"ylabel"	: "Distance from EFR normalized w.r.t. bottleneck capacity"
+			"ylabel"	: "Distance from OFR normalized w.r.t. bottleneck capacity"
 		}, 
 		"conns": {
 			"position"	: 224, 

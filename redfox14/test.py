@@ -58,7 +58,7 @@ def start_test(
 		vr_limit, list_markers,
 		list_queuelen, switch_type,
 		list_num_bands, list_guard_bands, bn_cap, 
-		list_free_b, list_do_comp_rtt, do_symm):
+		list_free_b, list_do_comp_rtt, do_symm, list_symm_width):
 
 	# ------------------------------------ RESET THE NETWORK --------------------------------
 	reset_switch()
@@ -93,149 +93,165 @@ def start_test(
 			for num_bands in list_num_bands:
 				for guard_bands in list_guard_bands:
 					for free_b in list_free_b:
-						for do_comp_rtt in list_do_comp_rtt:
+						for symm_width in list_symm_width:
+							for do_comp_rtt in list_do_comp_rtt:
 
-							# ----------- Skip useless standalone configs. ----------
-							if switch_type == STANDALONE:
-								if (
-									(len(list_markers)>1 and markers != NO_MARKERS) or
-									(num_bands != list_num_bands[0]) or									
-									(free_b != list_free_b[0]) or 
-									(guard_bands != list_guard_bands[0]) or
-									(free_b != list_free_b[0]) or 
-									(do_comp_rtt != list_do_comp_rtt[0])
-								):					
-									print "Wrong standalone configuration, skip test"
-									continue
-							# ----------- Skip useless uguale configs. ----------
-							else:
-								if markers == NO_MARKERS:
-									print "UGUALE without markers, skip test"
-									continue
-
-								if guard_bands>num_bands:
-									print "guard_bands > num_bands, skip test"
-									continue	
-
-								if do_symm and num_bands % 2!=0:
-									print "Only even num_bands, skip test"
-									continue
-
-							# ----------------TCP CONNECTIONS ---------------
-							fixed_conns = []
-							if not do_use_conns_list:
-								delta_conns = range_conns[1]-range_conns[0]
-								if delta_conns == 0:
-									fixed_conns = [range_conns[0]]*n_users
+								# ----------- Skip useless standalone configs. ----------
+								if switch_type == STANDALONE:
+									if (
+										(len(list_markers)>1 and markers != NO_MARKERS) or
+										(num_bands != list_num_bands[0]) or									
+										(free_b != list_free_b[0]) or 
+										(guard_bands != list_guard_bands[0]) or
+										(free_b != list_free_b[0]) or 
+										(do_comp_rtt != list_do_comp_rtt[0])
+									):					
+										print "Wrong standalone configuration, skip test"
+										continue
+								# ----------- Skip useless uguale configs. ----------
 								else:
-									"""
-									es. range=[2,8] = (2,3,4,5,6,7,8)
-									#uguali=len(users)/delta(range) 
-									7 users --> (2,3,4,5,6,7,8)
-									9 users --> (2,3,4,5,6,7,8,2,3)
-									if not divisible, return to random
-									"""
-									conn_list = range(range_conns[0], range_conns[1]+1)
-									i=0
-									for u in range(n_users):
-										fixed_conns.append(conn_list[i])
-										i=(i+1) % len(conn_list)
-									random.shuffle(fixed_conns)	
-							else:
-								fixed_conns = list_conns
-								range_conns = [min(list_conns), max(list_conns)]	
+									if markers == NO_MARKERS:
+										print "UGUALE without markers, skip test"
+										continue
 
-							# ------------------------ RTTS ----------------------
-							"""
-							If the range has zero difference, all users have the same rtt
-							If not, RTTs will be equally distributed in the range
-							"""	
-							fixed_rtts = []
-							if not do_use_rtts_list:
-								delta_rtts = range_rtts[1]-range_rtts[0]
-								if delta_rtts == 0:
-									fixed_rtts = [range_rtts[0]]*n_users
+									if guard_bands>num_bands:
+										print "guard_bands > num_bands, skip test"
+										continue	
+
+									if do_symm and num_bands % 2!=0:
+										print "Only even num_bands, skip test"
+										continue
+
+								# ----------------TCP CONNECTIONS ---------------
+								fixed_conns = []
+								if not do_use_conns_list:
+									delta_conns = range_conns[1]-range_conns[0]
+									if delta_conns == 0:
+										fixed_conns = [range_conns[0]]*n_users
+									else:
+										"""
+										es. range=[2,8] = (2,3,4,5,6,7,8)
+										#uguali=len(users)/delta(range) 
+										7 users --> (2,3,4,5,6,7,8)
+										9 users --> (2,3,4,5,6,7,8,2,3)
+										if not divisible, return to random
+										"""
+										conn_list = range(range_conns[0], range_conns[1]+1)
+										i=0
+										for u in range(n_users):
+											fixed_conns.append(conn_list[i])
+											i=(i+1) % len(conn_list)
+										random.shuffle(fixed_conns)	
 								else:
-									step = delta_rtts/float(n_users-1)
-									for i in range(n_users):
-										fixed_rtts.append(range_rtts[0]+(i*step))	
-									random.shuffle(fixed_rtts)
-							else:
-								fixed_rtts = list_rtts
-								range_rtts = [min(list_rtts), max(list_rtts)]
+									fixed_conns = list_conns
+									range_conns = [min(list_conns), max(list_conns)]	
 
-							if (len(set(fixed_rtts))==1 and 
-								len(list_do_comp_rtt)>1 and 	
-								do_comp_rtt):
-								print "Useless RTT compensation, skip test"
-								continue
+								# ------------------------ RTTS ----------------------
+								"""
+								If the range has zero difference, all users have the same rtt
+								If not, RTTs will be equally distributed in the range
+								"""	
+								fixed_rtts = []
+								if not do_use_rtts_list:
+									delta_rtts = range_rtts[1]-range_rtts[0]
+									if delta_rtts == 0:
+										fixed_rtts = [range_rtts[0]]*n_users
+									else:
+										step = delta_rtts/float(n_users-1)
+										for i in range(n_users):
+											fixed_rtts.append(range_rtts[0]+(i*step))	
+										random.shuffle(fixed_rtts)
+								else:
+									fixed_rtts = list_rtts
+									range_rtts = [min(list_rtts), max(list_rtts)]
 
-							# --------------- BANDS ASSIGNMENT ----------------
+								if (len(set(fixed_rtts))==1 and 
+									len(list_do_comp_rtt)>1 and 	
+									do_comp_rtt):
+									print "Useless RTT compensation, skip test"
+									continue
 
-							g_rates = [] # guaranteed rates
-							e_f_rates = [] # expected fair rates
-							m_m_rates = [] # maximum markers rates
-							coeffs = [] # compensate rtt coefficients
+								# --------------- BANDS ASSIGNMENT ----------------
 
-							C = rate_to_int(bn_cap)
-							free_C = C*(1.0 - free_b) # capacity to use for guaranteed rates
-							g_rate = free_C/float(n_users)
-							g_rates = [num_to_rate(g_rate)]*n_users
+								g_rates = [] # guaranteed rates
+								e_f_rates = [] # expected fair rates
+								m_m_rates = [] # maximum markers rates
+								coeffs = [] # compensate rtt coefficients
 
-							e_f_rate = C/float(n_users)
-							e_f_rates = [num_to_rate(e_f_rate)]*n_users
+								C = rate_to_int(bn_cap)
+								free_C = C*(1.0 - free_b) # capacity to use for guaranteed rates
+								g_rate = free_C/float(n_users)
+								g_rates = [num_to_rate(g_rate)]*n_users
 
-							m_m_rate = ml.get_marker_max_rate(
-									g_rates, free_b, C, n_users, 
-									guard_bands, num_bands, do_symm) 	
+								e_f_rate = C/float(n_users)
+								e_f_rates = [num_to_rate(e_f_rate)]*n_users
 
-							coeffs = [1]*n_users
-							if do_comp_rtt and not do_symm:
-								coeffs = ml.get_rtt_coefficients(
-										fixed_rtts, C, n_users, strength)
+								m_m_rate = ml.get_marker_max_rate(
+										C, n_users, g_rates, e_f_rates, 
+										num_bands, guard_bands, do_symm, symm_width) 
 
-							for i in range(n_users):						
-								m_m_rate = m_m_rate * coeffs[i]								
-								m_m_rates.append(num_to_rate(m_m_rate))
+								"""
+								Detect if symmetric_width was modified
+								and write a consistent value
+								"""	
+								symw = symm_width
+								if do_symm:
+									if num_bands == 2: # all the bandwidth is used
+										symw = num_to_rate(m_m_rate)
+									else:
+										symw_i = rate_to_int(symw)
+										symw = num_to_rate(min(symw_i, m_m_rate))
 
-							if queuelen == -1:
-								qsw = optimal_queue_len(fixed_rtts, fixed_conns, C)
-							else:
-								qsw = queuelen
+								# --------------- RTT COMPENSATION ----------------
+								coeffs = [1]*n_users
+								if do_comp_rtt and not do_symm:
+									coeffs = ml.get_rtt_coefficients(
+											fixed_rtts, C, n_users, strength)
 
-							configuration={
-								"cookie"		: cookie, 
+								for i in range(n_users):						
+									m_m_rate = m_m_rate * coeffs[i]								
+									m_m_rates.append(num_to_rate(m_m_rate))
 
-								"fixed_conns"	: fixed_conns, 	
-								"fixed_rtts"	: fixed_rtts, 
-								"list_users"	: list_users,
-								"n_users"		: n_users,
-								"range_conns"	: range_conns,
-								"range_rtts"	: range_rtts,
+								if queuelen == -1:
+									qsw = optimal_queue_len(fixed_rtts, fixed_conns, C)
+								else:
+									qsw = queuelen
 
-								"vr_limit"		: vr_limit, 
-								"markers"		: markers,
-								"tech"			: tech,
+								# --------------- SAVE EFFECTIVE PARAMETERS ----------------
+								configuration={
+									"cookie"		: cookie, 
 
-								"queuelen"		: qsw,
-								"switch_type"	: switch_type,
+									"fixed_conns"	: fixed_conns, 	
+									"fixed_rtts"	: fixed_rtts, 
+									"list_users"	: list_users,
+									"n_users"		: n_users,
+									"range_conns"	: range_conns,
+									"range_rtts"	: range_rtts,
 
-								"num_bands"		: num_bands,
-								"guard_bands"	: guard_bands,
-								"bn_cap"		: bn_cap, 	
-								"free_b"		: free_b, 
-								"do_comp_rtt" 	: do_comp_rtt,
-								"strength"		: strength,
-								"do_symm"		: do_symm,
+									"vr_limit"		: vr_limit, 
+									"markers"		: markers,
+									"tech"			: tech,
 
-								"g_rates"		: g_rates, 				
-								"m_m_rates"		: m_m_rates,
-								"e_f_rates"		: e_f_rates,
+									"queuelen"		: qsw,
+									"switch_type"	: switch_type,
 
-								"duration"		: DURATION
-							}
+									"num_bands"		: num_bands,
+									"guard_bands"	: guard_bands,
+									"bn_cap"		: bn_cap, 	
+									"free_b"		: free_b, 
+									"do_comp_rtt" 	: do_comp_rtt,
+									"strength"		: strength,
+									"do_symm"		: do_symm,
+									"symm_width"	: symw,
 
-							configurations.append(configuration)
+									"g_rates"		: g_rates, 				
+									"m_m_rates"		: m_m_rates,
+									"e_f_rates"		: e_f_rates,
+
+									"duration"		: DURATION
+								}
+
+								configurations.append(configuration)
 
 	random.shuffle(configurations)	
 
@@ -257,16 +273,18 @@ def start_test(
 	"""
 	limit_interface(vr_limit, "eth0")
 
-	i = 0
-	for ip_address in sorted(ADDRESSES):
-		if list_users[i] > 0:
-			str_ssh = "python create_ovs_and_veths.py -s{}".format(ip_address)
-			cmd_ssh(ip_address, str_ssh)
-		i += 1
+	if tech == TECH_OVS:
+		i = 0
+		for ip_address in sorted(ADDRESSES):
+			if list_users[i] > 0:
+				str_ssh = "python create_ovs_and_veths.py -s{}".format(ip_address)
+				cmd_ssh(ip_address, str_ssh)
+			i += 1
 
 	if switch_type == UGUALE:
 		# Start the controller
-		cmd_ssh_bg(SWITCH_IP, 
+		cmd_ssh_bg(
+			SWITCH_IP, 
 			"sudo ryu-manager /home/redfox/controller_code/uguale.py")
 		time.sleep(2)
 
@@ -296,12 +314,12 @@ def start_test(
 				print configuration
 
 				print "Configuring queues on the switch"
-				if configuration["switch_type"]==STANDALONE:					
+				if configuration["switch_type"] == STANDALONE:					
 					cmd_ssh(
 						SWITCH_IP, 
 						"sudo sh set ovs_standalone_queues.sh {}".format(configuration["queuelen"]))
 
-				elif configuration["switch_type"]==UGUALE:
+				elif configuration["switch_type"] == UGUALE:
 					cmd_ssh(
 						SWITCH_IP,  
 						"python set_ovs_uguale_queues.py -q{} -n{}".format(
@@ -340,12 +358,6 @@ def start_test(
 							# append results to CSV
 							stats = vr.get_stats(test)
 							append_to_csv(configuration, stats)
-							# transfer to luca
-							time.sleep(5)
-							transf_str = "scp {} luca@192.168.200.200:~/Dropbox/lucab/codes/bitbucket_codes/redfox14/{}/".format(
-								file_name, folder)
-							print "Executing {}".format(transf_str)
-							cmd(transf_str)
 						break # exit from current tries
 					else:
 						print "Errors in data, test failed"
@@ -378,7 +390,7 @@ def main(argv):
 	-Q<number of bands:L> 	-g<guard bands:L>\n\
 	-b<bottleneck capacity> -F<free bandwidth:L>\n\
 	-r<do compensate rtt:L>\n\
-	-k<do do_symm bands assignment>\n\
+	-k<do do_symm bands assignment> -w<symmetric width:L>\n\
 	\n\
 	NOTES:\n\
 	- If conns/rtts lists are given, ranges are not considered\n\
@@ -387,7 +399,7 @@ def main(argv):
 
 	try:
 		opts, args = getopt.getopt(argv,
-			"hf:c:s:v:p:P:t:T:u:C:m:q:S:Q:g:b:F:r:k:")
+			"hf:c:s:v:p:P:t:T:u:C:m:q:S:Q:g:b:F:r:k:w:")
 	except getopt.GetoptError:
 		print help_string
 		sys.exit(2)
@@ -416,6 +428,7 @@ def main(argv):
 	list_free_b = [0.5]
 	list_do_comp_rtt = [False]
 	do_symm = False
+	list_symm_width = ["20m"]
 
 	for opt, arg in opts:
 		if opt == '-h':
@@ -464,6 +477,8 @@ def main(argv):
 			list_do_comp_rtt = map(my_bool, arg.split(","))	
 		elif opt in ("-k"):
 			do_symm = my_bool(arg)
+		elif opt in ("-w"):
+			list_symm_width = arg.split(",")
 
 	n_users = sum(list_users)
 
@@ -500,7 +515,7 @@ def main(argv):
 		vr_limit, list_markers,
 		list_queuelen, switch_type,
 		list_num_bands, list_guard_bands, bn_cap, 
-		list_free_b, list_do_comp_rtt, do_symm)
+		list_free_b, list_do_comp_rtt, do_symm, list_symm_width)
 
 	start_test(
 		folder, cookie, do_save, do_visualize,
@@ -508,7 +523,7 @@ def main(argv):
 		vr_limit, list_markers,
 		list_queuelen, switch_type,
 		list_num_bands, list_guard_bands, bn_cap, 
-		list_free_b, list_do_comp_rtt, do_symm)
+		list_free_b, list_do_comp_rtt, do_symm, list_symm_width)
 
 if __name__ == "__main__":
 	main(sys.argv[1:])
