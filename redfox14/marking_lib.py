@@ -30,9 +30,10 @@ def get_rates(g_rate, bn_cap, m_m_rate, num_bands, do_symm, e_f_rate):
 			rates[e_f_rate] = 1			
 			rates[bn_cap] = 2 
 		else:
-			num_symm_bands = num_bands - 2 # number of equispaced bands
 			semi_symm_width = m_m_rate - e_f_rate
-			delta = semi_symm_width / (num_symm_bands / 2.0) # width of each symmetric band
+			num_symm_bands = num_bands - 2 # number of equispaced bands	
+
+			delta = float(2*semi_symm_width) / float(num_symm_bands) # width of each symmetric band
 
 			"""
 			Find the first threshold (thr) for symmetric bands.
@@ -68,7 +69,6 @@ def get_rates(g_rate, bn_cap, m_m_rate, num_bands, do_symm, e_f_rate):
 			if new_rate>=bn_cap:
 				break
 	return rates
-
 
 """
 NOTE ON PARAMS: 
@@ -128,8 +128,6 @@ Example (num_bands = 8, do_symm = True, symm_width)
 [a,b] is divided into num_bands-2 bands.
 The band #1 is assigned to rates lower than a
 The band #num_bands is assigned to rates bigger than b
-Since the EFR must be between two bands, 
-only even num_bands are expected.
 
 If the symmetric interval cannot be applied
 (because the width is greater than 2*EFR)
@@ -159,11 +157,57 @@ Example (num_bands = 8, do_symm = True, symm_width/2 >= EFR)
 ---------						|
 |	1	|						| 
 --------- <--- a = 0			|
+
+- If num_bands is even, the EFR will fall exactly between 2 bands.
+- If num_bands is odd, the ERF will fall exactly in the middle od the central band.
+
+Example (num_bands = 7, do_symm = True, symm_width)
+--------- <--- bn_cap or C
+| 		|
+|	7	|
+|		|										
+--------- <--- b = EFR + symm_width/2 = MMR 	|
+|	6	|										|
+---------										|
+|	5	|										|
+---------  										| = symmetric width
+|	4	| <---- EFR						 		|	
+---------						 				|
+|	3	|						 				|
+---------						 				|
+|	2	|						 				|
+--------- <--- a = EFR - symm_width/2 			|
+|		|
+|	1	|
+|		|
+---------
+
+Example (num_bands = 7, do_symm = True, symm_width/2 >= EFR)
+--------- <--- bn_cap or C
+|		|
+|		|
+|		|
+|	6	|
+|		|
+|		|
+|		|
+|		|						
+--------- <--- b = 2*EFR = MMR 	|
+|	5	|						|
+---------						|
+|	4	|						|
+---------  						| = 2 * EFR
+|	3	| <---- EFR				|						 	
+---------						|
+|	2	|						| 
+---------						|
+|	1	|						| 
+--------- <--- a = 0			|
 """
 def get_marker_max_rate(C, n_users, g_rates, e_f_rates, 
 	num_bands, guard_bands, do_symm, symm_width): 
 
-	if do_symm:
+	if do_symm is True:
 		efr = min(map(rate_to_int, e_f_rates))
 
 		if num_bands == 2:
@@ -175,84 +219,87 @@ def get_marker_max_rate(C, n_users, g_rates, e_f_rates,
 			return efr + semi_amp
 		else: # The symmetric width must be reduced
 			return 2 * efr 
+	else: 
+		"""
+		Maximum fair rate at which an user will converge.
+		When users have the same g_u, this is the EFR
+		"""  
+		mfr = max(map(rate_to_int, e_f_rates))
 
-	"""
-	Maximum fair rate at which an user will converge.
-	When users have the same g_u, this is the EFR
-	"""  
-	mfr = max(map(rate_to_int, e_f_rates))
+		# If the mmr is not used, c must be divided simply in num_bands bands
+		if guard_bands == -1 or guard_bands >= num_bands:
+			return (num_bands - 1) * (C / float(num_bands))
 
-	# If the mmr is not used, c must be divided simply in num_bands bands
-	if guard_bands == -1 or guard_bands >= num_bands:
-		return (num_bands - 1) * (C / float(num_bands))
+		if guard_bands == 0:
+			return mfr
 
-	if guard_bands == 0:
-		return mfr
+		# normal mmr case
+		if (num_bands - guard_bands - 1) > 0:
+			delta = mfr / float(num_bands - guard_bands - 1)
+		else:
+			delta = mfr
 
-	# normal mmr case
-	if (num_bands - guard_bands - 1) > 0:
-		delta = mfr / float(num_bands - guard_bands - 1)
-	else:
-		delta = mfr
+		mmr = (mfr + (guard_bands * delta)) # maximum marking rate
+		return min(mmr, C)
 
-	mmr = (mfr + (guard_bands * delta)) # maximum marking rate
-	return min(mmr, C)
 
 """
 Return the multipliers that will compensate the effect of rtt
 This works only if everyone must obtain the same EFR
-old law: return (0.3*np.log(x)) #LAW3
 """
-def get_rtt_coefficients(rtts, C, n_users, strenght=0.15):
+def get_rtt_coefficients(rtts, C, strength=1):
 	"""
-	goodput_1 / goodput_i = RTT_i / RTT_1 
-
-	goodput_i = RTT_1/RTT_i * goodput_1
-	we put goodput_1=1
-
+	goodput_1 / goodput_i = RTT_i / RTT_1  ==> 	goodput_i = RTT_1/RTT_i * goodput_1
+	Hp goodput_1=1
 	m_u = (c*rtt_u)/(N*rtt_1*r1)
-
 	"""
-	r=[] # list of estimated rates
-	coeffs=[] # list of coefficients that compensate RTT
+	"""
+	If all RTT are equal, all ones
+	"""
+	if len(set(rtts)) == 1 or strength == 0:
+		return [1]*len(rtts)
+
+	r = [] # list of estimated rates
+	coeffs = [] # list of coefficients that compensate RTT
 	rtt_min = min(rtts)
 
 	for rtt in rtts:
 		r.append(float(rtt_min) / rtt)
 
-	c = np.sum(r)
+	c = np.sum(r) # capacity as sum of estimated rates
 
 	# see luca's thesis aproach/rtt compensation
-	m = float(c) / (n_users * rtt_min)
-	q = 0
+	# basic line
+	n_users = len(rtts)
+	m = float(c)/(n_users*rtt_min) # angular coefficient
+	q = 0 
 
-	# If requested, multiply the angular coefficient time strenght
-	# and center the line on the middle value
-	if strenght != 1:
-		x_mean = np.mean(rtts)
-		y_mean = m * x_mean
-		m = m * strenght
-		q = y_mean - (m * x_mean)
+	# If requested, multiply the angular coefficient time strength
+	# and center the line where y=1
+	if strength != 1:
+		m2 = 0 # new angular coefficient
+		q2 = 0 # new q [y=mx+q]
+		done = False # true if new line is ok
+		COEFF_MIN = 0.1
+		x_1 = 1.0 / m
+
+		while not done:			
+			m2 = m * strength
+			q2 = 1 - (m2 * x_1)
+			coeff_min = (rtt_min * m2) + q2
+
+			if coeff_min >= COEFF_MIN:
+				done = True
+			else:
+				strength = strength - 0.001
+		m = m2
+		q = q2
 
 	for i in range(n_users):
 		mult = (m * rtts[i]) + q
 		coeffs.append(max(mult, 0))
-	# print m,q
-	# print sorted(coeffs)
 
-	"""
-	If possible, normalize coefficients so that the middle rtt gets m_u=1
-	by subtracting a fixed value.
-	it is possible only if the min coeff does not become negative
-	"""
-	middle_rtt = np.mean([max(rtts), min(rtts)])
-	val_middle = (m * middle_rtt) + q 
-	norm_delta = val_middle - 1
-	# print min(rtts), middle_rtt, max(rtts), val_middle, norm_delta
-	if(min(coeffs) - norm_delta)>0.0:
-		coeffs = map(lambda x: x - norm_delta, coeffs)
-	# print sorted(coeffs)
-	return coeffs
+	return coeffs, strength
 
 """
 find the maximum DSCP assigned in the dict

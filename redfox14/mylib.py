@@ -60,7 +60,7 @@ UGUALE = "uguale"
 SWITCH_TYPES = [STANDALONE, UGUALE]
 IPERF_REPORT_INTERVAL = 1 
 DURATION = 180 # duration of tests
-MAX_TRIES = 1 # max failed tries to declare a test/configuration failed
+MAX_TRIES = 2 # max failed tries to declare a test/configuration failed
 SYNC_TIME = 10 # after this time from t0(server) users start iperf connections
 RESULTS_CSV_FILENAME = "results_symm.csv"
 
@@ -121,12 +121,12 @@ STATS_COLUMNS = [
 # subset of PARAMS_COLUMNS 
 PARAMS_BRIEF = [
 	"switch_type", "markers", "queuelen", 
-	"free_b", "num_bands", "guard_bands", "do_comp_rtt"
+	"free_b", "num_bands", "guard_bands", "do_comp_rtt", "strength"
 ]
 # Names of PARAMS_BRIEF to be printed
 PARAMS_BRIEF_SHOW = [
 	"Switch type", "Marking type", "Switch queue lenght", 
-	"Unused capacity", "N. of bands", "N. of guard bands", "RTT compensation"
+	"Unused capacity", "N. of bands", "N. of guard bands", "RTT compensation", "h"
 ]
 
 
@@ -348,7 +348,9 @@ def optimal_queue_len(rtts, conns, C):
 Make an interface negotiate for 100Mbps or 1Gbps
 """
 def limit_interface(limit, intf):
-	if limit=="100.0m":
+	limit_int = rate_to_int(limit)
+	print "{} ---> {}".format(limit, limit_int)
+	if limit_int == (100 * 10**6):
 		print "Autoneg {}@100Mbps".format(intf)
 		sudo_cmd("ethtool -s {} advertise 0x008 autoneg on \
 			speed 100 duplex full".format(intf))

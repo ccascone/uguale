@@ -1,10 +1,11 @@
 #!/usr/bin/python
-import pickle, os, sys, getopt, math
-import matplotlib.pyplot as plt
+import pickle, os, sys, getopt
 import numpy as np
-import pylab as P
-from scipy import interpolate
+import math
+import matplotlib.pyplot as plt
 from mylib import *
+from scipy import interpolate
+from matplotlib import gridspec
 
 def get_normalized_vals(vals, expected_fair_rate, C):	
 	# return map(lambda x: ((x - expected_fair_rate)/expected_fair_rate)**2, vals)
@@ -289,7 +290,7 @@ def get_text(params, stat, brief=False):
 	"""
 	1st PARAGRAPH: user: #c, rtt
 	"""
-	users = map(lambda x: x+1, stat["ids"])
+	users = map(lambda x: x+1, stat["ids"]) # IDs of users
 	text += "USERS\n"
 	for i in range(len(users)):
 		text += "User {}: {}c, {}ms\n".format(
@@ -302,9 +303,13 @@ def get_text(params, stat, brief=False):
 	params_to_show2 : list of names to print for the considered parameters 
 	"""
 	if brief:
-		if params["do_symm"] and params["switch_type"] == UGUALE:
+		if ("do_symm" in params and 
+			params["do_symm"] is True and 
+			params["switch_type"] == UGUALE):
+
 			params_to_show = PARAMS_BRIEF_SYMM
 			params_to_show2 = PARAMS_BRIEF_SYMM_SHOW
+
 		elif params["switch_type"] == STANDALONE:
 			params_to_show = PARAMS_BRIEF_STANDALONE
 			params_to_show2 = PARAMS_BRIEF_STANDALONE_SHOW
@@ -318,23 +323,46 @@ def get_text(params, stat, brief=False):
 
 	text += "\nCONFIGURATION\n"	
 	i = 0
+
+	old_keys = ["marking", "bands", "comp_rtt"]
+	new_keys = ["markers", "num_bands", "do_comp_rtt"]
+
 	for param in params_to_show:
 
+		value = "unknown"
 		# params already considered in the 1st paragraph
 		if params in ["fixed_conns", "fixed_rtts"]:
 			continue
 
-		if param not in params:
-			value == "unknown"
-		else:
+		if param in params:
 			value = params[param]
+
+		for oldi in range(len(old_keys)):
+			if (param == new_keys[oldi] and 
+				new_keys[oldi] not in params and
+				old_keys[oldi] in params):
+				value = params[old_keys[oldi]]
+
+		if (param == "num_bands" and 
+			"num_bands" not in params and
+			"bands" not in params):
+			value = 8
+
+		if param == "queuelen" and "queuelen_switch" in params:
+			value = params["queuelen_switch"]
+
+		if param == "do_comp_rtt" and len(set(params["fixed_rtts"])) == 1:
+			value = False
+
+		if param == "strength" and params["do_comp_rtt"] is False:
+			continue
 
 		"""
 		Modify parameter value for unusual configurations
 		"""
 		if params["switch_type"] == STANDALONE:
 			if param == "markers":
-				value = NO_MARKERS
+				value = "-"
 			elif param == "guard_bands":
 				value = -1
 			elif param == "do_comp_rtt":
@@ -344,12 +372,10 @@ def get_text(params, stat, brief=False):
 			elif param == "num_bands":
 				value == 1
 
-		# compatibility for old tests
-		if params["switch_type"] == UGUALE and "num_bands" not in params:
-			value = 8
-
-		if param == "do_comp_rtt" and len(set(params["fixed_rtts"]))==1:
-			value = False
+		if value == IPTABLES_MARKERS:
+			value = "iptables"
+		if value == BUCKETS_MARKERS:
+			value = "t.buckets" 
 
 		param2 = params_to_show2[i] # parameter's name to print
 
@@ -382,101 +408,133 @@ def get_text(params, stat, brief=False):
 
 	return text[:-1]
 
-
 def plot_file(test, stat, instance_name, new_folders, do_save):
-
 	params = dict(test["params"])
 	new_params = cast_value(params)
 	text = get_text(new_params, stat, brief=True)
 
+	label1 = "Distance from OFR normalized\nw.r.t. bottleneck capacity"
 	subplots = {
 		"distr": {
-			"position"	: 221, 
-			"title"		: "(a)", 
-			"xlabel"	: "Distance from OFR normalized w.r.t. bottleneck capacity", 
+			"position"	: 6,
+			"title"		: "(a)",
+			"xlabel"	: label1,
 			"ylabel"	: "Discrete distribution"
-		}, 
+		},
 		"gen": {
-			"position"	: 222, 
-			"title"		: "(b)", 
-			"xlabel"	: "User ID", 
-			"ylabel"	: "Distance from OFR normalized w.r.t. bottleneck capacity"
-		}, 
-		"rtts": {
-			"position"	: 223, 
-			"title"		: "(c)", 
-			"xlabel"	: "RTT [ms]", 
-			"ylabel"	: "Distance from OFR normalized w.r.t. bottleneck capacity"
-		}, 
+			"position"	: 8,
+			"title"		: "(b)",
+			"xlabel"	: "User ID",
+			"ylabel"	: label1
+		},
 		"conns": {
-			"position"	: 224, 
-			"title"		: "(d)", 
-			"xlabel"	: "Number of TCP connections", 
+			"position"	: 16,
+			"title"		: "(c)",
+			"xlabel"	: "N. of TCP connections",
+			"ylabel"	: label1
+		},
+		"rtts": {
+			"position"	: 18,
+			"title"		: "(d)",
+			"xlabel"	: "RTT [ms]",
 			"ylabel"	: ""
 		}
 	}
 
-	height = 11
-	width = height * 1.7
-	hor_border = 0.10 # as % of 1 that is the total figure size
-	ver_border = 0.05
-	end_plots = 0.8 # We must leave space for the legend
-	y_lims = [-0.10, +0.10] # values in plots
-	x_lims = [-0.15, +0.15] # used for histograms	
-
-	ax = {} # subplots
+	height = 8.5
+	width = 12
 	fig = plt.figure(1, figsize=(width, height))
+	ax = {} # subplots
+	"""
+	Divide the paper in a 5x5 matrix
+	1	2	3	4	5
+	6	7	8	9	10
+	11	12	13	14	15
+	16	17	18	19	20
+	21	22	23	24	25
+
+	borders are in:
+	- 1,3,5 row
+	- 2,4 column
+	"""
+	gs = gridspec.GridSpec(5, 5, 
+		width_ratios=[6, 30, 5, 30, 29], 
+		height_ratios=[2, 35, 10, 35, 18])
+	i=0
 	for key in subplots:
-		ax[key] = fig.add_subplot(subplots[key]["position"])
+		ax[key] = plt.subplot(gs[subplots[key]["position"]])
 		ax[key].set_ylabel(subplots[key]["ylabel"])
 		ax[key].set_xlabel(subplots[key]["xlabel"])
 		ax[key].set_title(subplots[key]["title"])
-		ax[key].grid(True)
+		i+=1
 
+	# plt.tight_layout()
 	# +y
 	# |
 	# |
 	# |
 	# ------+ x
+	# # text may be long
+	# if len(params["m_m_rates"])>2 and len(set(params["m_m_rates"]))>1:
+	# 	end_plots = 0.7 - border # We must leave space for the legend
+	# else:
+	# 	end_plots = 0.85 - border # We must leave space for the legen
 
-	fig.subplots_adjust(left=hor_border*0.5, bottom=ver_border, 
-		right=end_plots, top=1-(ver_border*0.66))
+	fig.subplots_adjust(
+		left=0,
+		bottom=0,
+		right=1,
+		top=1
+	)
 
+	plt.figtext(
+		0.75,
+		0.94,  
+		text, va='top', ha='left', 
+		bbox={'facecolor': 'white', 'pad': 20}
+	)
+
+	# ----------------------------------------------------------
 	users = map(lambda x: x+1, stat["ids"])
 	fixed_rtts = test["params"]["fixed_rtts"]
 	fixed_conns = test["params"]["fixed_conns"]
 	mean_rate = stat["distr_mean"]
-
+	y_lims = [-0.10, +0.10] # values in plots
+	x_lims = [-0.15, +0.15] # used for histograms	
 	# ----------------------------- GENERAL ----------------------------------------
 
 	x_min = 0
 	x_max = max(users)+1
 
 	ax["gen"].set_xlim([x_min, x_max])
-	ax["gen"].xaxis.set_ticks(sorted(users))	
+	ax["gen"].xaxis.set_ticks(users)
+	ax["gen"].grid(True) 
+	ticks_gen = [users[0]] + [""]*(int(len(users)/2.0)-1) + [users[int(len(users)/2.0)]] + [""]*(int(len(users)/2.0)-1) + [users[-1]]
+	ax["gen"].set_xticklabels(ticks_gen)	
 	ax["gen"].set_ylim(y_lims)	
-	ax["gen"].errorbar(users, stat["means"], stat["stds"], 
-		linestyle="None", marker="o", color="black", label="Mean/std")
+	ax["gen"].errorbar(users, stat["means"], stat["stds"], linestyle="None", 
+		marker="o", color="black", label="Mean/std")
+	ax["gen"].axhline(linewidth=1, color="black")     
 	ax["gen"].legend()
-	ax["gen"].axhline(linewidth=1, color="black")       
 
 	# ----------------------------- DISTRIBUTION + HISTOGRAM----------------------------------------
 
-	n, bins, rectangles = P.hist(
-		stat["joint_vals"], 
-		bins=np.linspace(-1, +1, HIST_BINS), 
-		normed=True, 
-		edgecolor='black', 
-		facecolor='black', 
-		antialiased=True, 
-		alpha=1)
+	n, bins, rectangles = ax["distr"].hist(stat["joint_vals"], 
+			bins=np.linspace(-1, +1, HIST_BINS), 
+			normed=True, 
+			edgecolor='black',
+			facecolor='black',
+			antialiased=True,
+			alpha=1)
 
 	max_y = max(n)*1.10
-	ax["distr"].plot([mean_rate, mean_rate], [0, max_y], 
-		color="red", label="Mean", linewidth=1.5)
-	ax["distr"].legend()
+	ax["distr"].plot([mean_rate, mean_rate], [0, max_y], color="red", label="Mean", linewidth=1.5)
 	ax["distr"].set_xlim(x_lims)	
 	ax["distr"].set_ylim([0, max_y])	
+
+	ax["distr"].grid(True) 
+	ax["distr"].xaxis.set_ticks(np.linspace(-0.15, +0.15, 7))
+	ax["distr"].set_xticklabels([-0.15, "", "", 0, "", "", +0.15])
 
 	stat_text = ""
 	key2 = ["Mean", "Var", "Std", "MSE"]
@@ -492,8 +550,36 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 		i+=1
 
 	ax["distr"].text(x_lims[0]+0.01, max_y*0.97, stat_text, ha="left", va="top")
+	ax["distr"].legend()
+	# ----------------------------- CONNS ----------------------------------------
+	x_min = max(0, min(fixed_conns)-1)
+	x_max = max(fixed_conns)+1
 
-	# ----------------------------- RTTS ----------------------------------------
+	same_conns = stat["same_conns"]
+	means_same_conns = []
+	dev_same_conns = []
+	for conn in sorted(same_conns):
+		means_same_conns.append(same_conns[conn]["mean"])
+		dev_same_conns.append(same_conns[conn]["std"])
+
+	ax["conns"].set_xlim([x_min, x_max])	
+
+	conns_list = sorted(same_conns.keys())
+	ax["conns"].grid(True) 
+	if len(same_conns)==1:
+		ticks_gen = conns_list 
+	else:
+		ticks_gen = [conns_list[0]] + [""]*(int(len(conns_list)/2.0)-1) + [conns_list[int(len(conns_list)/2.0)]] + [""]*(int(len(conns_list)/2.0)-1) + [conns_list[-1]]
+	ax["conns"].xaxis.set_ticks(conns_list)
+	ax["conns"].set_xticklabels(ticks_gen)	
+
+	ax["conns"].set_ylim(y_lims)
+	ax["conns"].errorbar(sorted(same_conns), means_same_conns, dev_same_conns, 
+		linestyle="None", marker="o", color="black", label="Mean/std")
+	ax["conns"].legend()
+	ax["conns"].axhline(linewidth=1, color="black")        
+
+# ----------------------------- RTTS ----------------------------------------
 
 	same_rtts = stat["same_rtts"]
 	means_same_rtts = []
@@ -515,13 +601,16 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	"""
 	If there are many RTT, the x-axis has no space to display all labels
 	"""
-	if len(same_rtts)>18:
-		"""
-		Alternate from the first. If it is even, it won't be nice :-(
-		"""
-		ax["rtts"].xaxis.set_ticks(sorted(same_rtts)[::2])		
+
+	rtts_list = sorted(same_rtts.keys())	
+	ax["rtts"].grid(True) 
+	if len(same_rtts)==1:
+		ticks_gen = rtts_list
 	else:
-		ax["rtts"].xaxis.set_ticks(sorted(same_rtts))
+
+		ticks_gen = [rtts_list[0]] + [""]*(int(len(rtts_list)/2.0)-1) + [rtts_list[int(len(rtts_list)/2.0)]] + [""]*(int(len(rtts_list)/2.0)-1) + [rtts_list[-1]]
+	ax["rtts"].xaxis.set_ticks(rtts_list)
+	ax["rtts"].set_xticklabels(ticks_gen)
 
 	ax["rtts"].set_ylim(y_lims)
 	ax["rtts"].errorbar(sorted(same_rtts), means_same_rtts, dev_same_rtts, 
@@ -529,42 +618,15 @@ def plot_file(test, stat, instance_name, new_folders, do_save):
 	ax["rtts"].legend()
 	ax["rtts"].axhline(linewidth=1, color="black")       
 
-	# ----------------------------- CONNS ----------------------------------------
-	x_min = max(0, min(fixed_conns)-1)
-	x_max = max(fixed_conns)+1
-
-	same_conns = stat["same_conns"]
-	means_same_conns = []
-	dev_same_conns = []
-	for conn in sorted(same_conns):
-		means_same_conns.append(same_conns[conn]["mean"])
-		dev_same_conns.append(same_conns[conn]["std"])
-
-	ax["conns"].set_xlim([x_min, x_max])	
-	ax["conns"].xaxis.set_ticks(sorted(same_conns))
-	ax["conns"].set_ylim(y_lims)
-	ax["conns"].errorbar(sorted(same_conns), means_same_conns, dev_same_conns, 
-		linestyle="None", marker="o", color="black", label="Mean/std")
-	ax["conns"].legend()
-	ax["conns"].axhline(linewidth=1, color="black")        
-	# ----------------------------- TEXTS ----------------------------------------
-
-	plt.figtext(end_plots+(0.33*hor_border), 1-(0.66*ver_border)-0.01, 
-		text, va='top', ha='left', bbox={'facecolor': 'white', 'pad': 20})
-
 	# ----------------------------- SAVE ----------------------------------------
-
 	"""
 	filename
 	"""
 	if do_save:
 		quality = "Q{}".format(int(stat["distr_mse"]*10**8))
 		timestamp = str(params["start_ts"]).replace(".", "_")
-
-		fig_filename="{}/{}_{}_{}.png".format(new_folders[0], quality, 
-			instance_name, timestamp)
+		fig_filename="{}/{}_{}_{}.png".format(new_folders[0], quality, instance_name, timestamp)
 		plt.savefig(fig_filename, format="PNG")
-
 		pdf_filename="{}/{}.pdf".format(new_folders[1], timestamp)
 		plt.savefig(pdf_filename, format="PDF")
 
