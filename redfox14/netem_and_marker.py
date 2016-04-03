@@ -226,3 +226,108 @@ def veth_netem_marker(intf, bn_cap, fixed_rtts, vr_limit, queuelen,
 		Alter the source IP of packets
 		"""
 		ipt.masquerade(veth_intf)	
+
+
+"""
+Apply amrker and netem to eth0 (there is only a user)
+"""
+def marker_single_interface(intf, bn_cap, rtt, vr_limit, queuelen, g_rate, m_m_rate, 
+		marking_type, num_bands, do_symm, e_f_rate, dest_port_tcp):
+
+	tc.remove_qdiscs(intf)		
+	ipt.flush_iptables()
+
+	"""
+	eth0 <--- netem 1: <--- dsmark 2:
+	or
+	eth0 <----------------- dsmark 2:
+	"""
+	netem_qdisc_id = 1
+	dsmark_qdisc_id = 2
+	parent = "root"
+
+	if if_delay>1 or vr_limit > 0: # [ms] apply a delaying qdisc
+		tc.add_netem_qdisc(
+			intf, parent, netem_qdisc_id, 
+			vr_limit, rtt, 0)
+		parent = 1
+
+	tc.add_dsmark_qdisc(intf, parent, dsmark_qdisc_id, 64, num_bands)
+	for dscp in range(1, num_bands+1): # i=1-->8
+		tc.change_dsmark_class(intf, dsmark_qdisc_id, dscp, dscp)
+
+	"""
+	Calculate bands
+	"""
+	rates = ml.get_rates(g_rate, bn_cap, 
+		m_m_rate, num_bands, do_symm, e_f_rate)
+	ml.print_rates(rates, bn_cap)
+
+	"""
+	Apply meters
+	"""
+	if marking == IPTABLES_MARKERS:
+		# put all measuring and classifying rules for the user
+		iptables_meter_marker(rates, dest_port_tcp, 
+			rtt, dsmark_qdisc_id)
+	elif marking == BUCKETS_MARKERS:
+		# put filters for the user on eth0
+		add_dsmark_filters(intf, dsmark_qdisc_id, 
+			rates, 1, num_bands, dest_port_tcp=dest_port_tcp)
+
+def main(argv):
+
+	help_string = "Usage: netem_and_marker.py -i<intf> -b<bn_cap> -r<rtt> -v<vr_limit> \
+	-g<g_rate> -m<mmr> -M<marking_type> -Q<num_bands> \
+	-s<do_symm> -e<expected fair rate> -d<destination_port_tcp>"
+
+	intf = "eth0"
+	bn_cap = "94.1m"
+	rtt = 0.0
+	vr_limit = "100m"
+	g_rate = "5m"
+	m_m_rate = "50m"
+	marking_type = IPTABLES_MARKERS
+	num_bands = 8
+	do_symm = False
+	e_f_rate = "31.3m"
+	dest_port_tcp = 5001
+
+	try:
+		opts, args = getopt.getopt(argv, "hi:b:r:v:g:m:M:Q:s:e:d:")
+	except getopt.GetoptError:
+		print help_string
+		sys.exit(2)
+
+	for opt, arg in opts:
+		if opt == '-h':
+			print help_string
+			sys.exit()
+		elif opt in ("-i"):
+			intf = arg
+		elif opt in ("-b"):
+			bn_cap = arg
+		elif opt in ("-r"):
+			rtt = float(arg)
+		elif opt in ("-v"):
+			vr_limit = arg
+		elif opt in ("-g"):
+			g_rate = arg
+		elif opt in ("-m"):
+			m_m_rate = arg
+		elif opt in ("-M"):
+			marking_type = arg
+		elif opt in ("-Q"):
+			num_bands = int(arg)
+		elif opt in ("-s"):
+			do_symm = my_bool(arg)
+		elif opt in ("-e"):
+			e_f_rate = arg
+		elif opt in ("-d"):
+			dest_port_tcp = int(arg)
+
+	marker_single_interface(intf, bn_cap, rtt, vr_limit, g_rate, m_m_rate, 
+		marking_type, num_bands, do_symm, e_f_rate, dest_port_tcp)
+
+if __name__ == "__main__":
+	main(sys.argv[1:])

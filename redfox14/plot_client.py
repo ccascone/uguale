@@ -554,7 +554,7 @@ def main(argv):
 	tcp_port = 5001
 	udp_port = 5002
 	network_interface = "eth0"
-	help_string = "Usage: plot<_server.py -c <server-ip> -i <interface> -t <tcp-port> -u <udp-port>"
+	help_string = "Usage: plot_client.py -c <server-ip> -i <interface> -t <tcp-port> -u <udp-port>"
 	help_string_2 = "TCP<>UDP!"
 
 	try:
