@@ -1,17 +1,17 @@
 #!/usr/bin/python
 import getopt
 import inspect
-import matplotlib
-import matplotlib.pyplot as plt
-import numpy as np
 import sys
 import threading
-import time
+from threading import Timer
+
+import matplotlib
+import matplotlib.pyplot as plt
 from numpy import ones, vstack
 from numpy.linalg import lstsq
 from scipy import interpolate
-from threading import Timer
 
+from cmdlib import killall, iterate_cmd_out
 from mylib import *
 
 """
@@ -286,7 +286,7 @@ def declare_as_singles(data, t1, t2, singles):
         end = len(data)
     for i in range(begin, end):
         singles.append(data[i])
-    # print len(singles)
+        # print len(singles)
 
 
 # Order singles and delete old singles
@@ -337,7 +337,7 @@ def iperf_tcp_thread(data, port, singles):
 
     tzeros = {}  # first timestamp of each user
 
-    for line in runPexpect(cmd):
+    for line in iterate_cmd_out(cmd):
         if stop.is_set():
             break
         """
@@ -393,7 +393,7 @@ def iperf_udp_thread(data, port, singles):
     report_interval = IPERF_REPORT_INTERVAL
     cmd = "iperf -s -i{} -fk -yC -u -p{}".format(report_interval, port)
     tzeros = {}
-    for line in runPexpect(cmd):
+    for line in iterate_cmd_out(cmd):
         if stop.is_set():
             break
         """
@@ -463,7 +463,7 @@ def bwm_ng_thread(data, interface):
     print "bwm-ng thread started"
     cmd = "bwm-ng -u bits -T rate -t 1000 -I {} -d 0 -c 0 -o csv".format(interface)
 
-    for line in runPexpect(cmd):
+    for line in iterate_cmd_out(cmd):
         if stop.is_set():
             break
         """
@@ -774,7 +774,7 @@ def run_server(interface, tcp_ports, udp_ports, interactive, duration, do_visual
         print "Running server processes..."
         while not stop.is_set():
             time.sleep(1)
-        # it should be stop.wait()
+            # it should be stop.wait()
     except (KeyboardInterrupt):  # executed only in case of exceptions
         print "Server interrupted by user"
         stop_server()

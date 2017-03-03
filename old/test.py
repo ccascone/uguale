@@ -1,16 +1,15 @@
 #!/usr/bin/python
 import datetime
 import getopt
-import os
 import pickle
 import random
 import sys
 import threading
-import time
 
 import marking_lib as ml
 import plot_server as ps
 import view_result as vr
+from cmdlib import cmd, cmd_ssh, cmd_ssh_bg
 from mylib import *
 
 """
@@ -101,14 +100,13 @@ def start_test(
 
                                     # ----------- Skip useless standalone configs. ----------
                                     if switch_type == STANDALONE:
-                                        if (
-                                                                    (len(list_markers) > 1 and markers != NO_MARKERS) or
-                                                                    (num_bands != list_num_bands[0]) or
-                                                                (free_b != list_free_b[0]) or
-                                                            (guard_bands != list_guard_bands[0]) or
-                                                        (free_b != list_free_b[0]) or
-                                                    (do_comp_rtt != list_do_comp_rtt[0])
-                                        ):
+                                        if ((len(list_markers) > 1 and markers != NO_MARKERS) or
+                                                (num_bands != list_num_bands[0]) or
+                                                (free_b != list_free_b[0]) or
+                                                (guard_bands != list_guard_bands[0]) or
+                                                (free_b != list_free_b[0]) or
+                                                (do_comp_rtt != list_do_comp_rtt[0])
+                                            ):
                                             print "Wrong standalone configuration, skip test"
                                             continue
                                     # ----------- Skip useless uguale configs. ----------
@@ -164,9 +162,7 @@ def start_test(
                                         fixed_rtts = list_rtts
                                         range_rtts = [min(list_rtts), max(list_rtts)]
 
-                                    if (len(set(fixed_rtts)) == 1 and
-                                                len(list_do_comp_rtt) > 1 and
-                                                do_comp_rtt is True):
+                                    if len(set(fixed_rtts)) == 1 and len(list_do_comp_rtt) > 1 and do_comp_rtt is True:
                                         print "Useless RTT compensation, skip test"
                                         continue
 
@@ -312,12 +308,8 @@ def start_test(
         time.sleep(2)
 
         # Put the switch in UGUALE mode
-        cmd_ssh(
-            SWITCH_IP,
-            "python config_ovs_uguale.py -c{} -q{} -n{}".format(
-                "127.0.0.1:6633",
-                100,
-                MAX_NUM_BANDS))
+        cmd_ssh(SWITCH_IP,
+                "python config_ovs_uguale.py -c 127.0.0.1:6633 -q 100 -n %s" % MAX_NUM_BANDS)
 
     try:
         for repetition in range(repetitions):

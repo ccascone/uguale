@@ -3,10 +3,19 @@ import getopt
 import sys
 
 from cmdlib import cmd
-from uconf import *
+from new.uconf import *
 
 
 def configure_uguale(controller, queuelen, num_queues):
+    """
+    Creates an OVS bridge named brUG, connected to the given controller and attached to num_queues queues served by a
+    priority scheduler. Moreover, sets queuelen for all SW_INTFS to queuelen pkts.
+
+    :param controller: controller string
+    :param queuelen: queue lenght in packets
+    :param num_queues: number of priority queues
+    :return:
+    """
     # Set the switch in secure-mode
     # it will need a controller, stop to learn
     cmd("ovs-vsctl set-fail-mode brUG secure")

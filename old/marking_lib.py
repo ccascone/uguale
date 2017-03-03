@@ -326,7 +326,7 @@ print the dict of rates
 """
 
 
-def print_rates(rates, bn_cap):
+def print_rates(rates):
     previous_rate = 0
     for rate in sorted(rates):
         dscp = rates[rate]

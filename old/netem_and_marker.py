@@ -90,7 +90,7 @@ def add_dsmark_filters(intf, dsmark_qdisc_id, rates, user, num_bands,
             tc.add_dsmark_filter(intf, dsmark_qdisc_id, prio,
                                  0, 0, 0, dscp,
                                  protocol="tcp", dport=dest_port_tcp)
-        # add_dsmark_filter(intf, dsmark_qdisc_id, prio, 0,0,0, dscp, fw=veth_id)
+            # add_dsmark_filter(intf, dsmark_qdisc_id, prio, 0,0,0, dscp, fw=veth_id)
 
 
 # ------------------- METER/MARKER WITH IPTABLES -----------------------------#

@@ -10,7 +10,7 @@ Delete all qdiscs from an interface
 
 
 def remove_qdiscs(intf):
-    sudo_cmd("tc qdisc del dev {} root".format(intf))
+    return "tc qdisc del dev {} root".format(intf)
 
 
 """
@@ -38,9 +38,8 @@ Creates a DSMARK qdisc
 
 
 def add_dsmark_qdisc(intf, parent_id, dsmark_qdisc_id, num_classes, default_class):
-    command = "tc qdisc add dev {} {} handle {}: dsmark indices {} default {}".format(
+    return "tc qdisc add dev {} {} handle {} dsmark indices {} default {}".format(
         intf, parent_string(parent_id), dsmark_qdisc_id, num_classes, default_class)
-    sudo_cmd(command)
 
 
 """
@@ -50,9 +49,8 @@ This functions create the real DSMARK classes attached to that qdisc.
 
 
 def change_dsmark_class(intf, dsmark_qdisc_id, dsmark_class_id, dscp):
-    command = "tc class change dev {} parent {}: classid {}:{} dsmark mask 0xff value {}".format(
+    return "tc class change dev {} parent {}: classid {}:{} dsmark mask 0xff value {}".format(
         intf, dsmark_qdisc_id, dsmark_qdisc_id, dsmark_class_id, hex(dscp << 2))
-    sudo_cmd(command)
 
 
 """
@@ -110,7 +108,7 @@ def add_netem_qdisc(intf, parent_id, netem_qdisc_id, rate=0, delay=0, limit=0):
     command = "tc qdisc add dev {} {} handle {}: netem {} {} {}".format(
         intf, parent_string(parent_id), netem_qdisc_id, my_delay, my_rate, my_limit)
 
-    sudo_cmd(command)
+    return command
 
 
 """
@@ -119,9 +117,7 @@ Add a packet FIFO qdisc to an interface
 
 
 def add_pfifo_qdisc(intf, parent_id, pfifo_id):
-    command = "tc qdisc add dev {} {} handle {}: pfifo".format(
-        intf, parent_string(parent_id), pfifo_id)
-    sudo_cmd(command)
+    return "tc qdisc add dev {} {} handle {}: pfifo".format(intf, parent_string(parent_id), pfifo_id)
 
 
 """

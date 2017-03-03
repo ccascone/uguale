@@ -6,16 +6,13 @@ ipert TCP connections at a certain instant.
 """
 import getopt
 import sys
-import time
 
 import netem_and_marker as nm
+from cmdlib import killall
 from mylib import *
 
 
-def run_program(
-        duration, start_ts,
-        fixed_conns, fixed_rtts, vr_limit, marking,
-        bn_cap, g_rates, m_m_rates, e_f_rates, num_bands, do_symm):
+def run_program(duration, start_ts, fixed_conns, fixed_rtts, vr_limit, marking, bn_cap, g_rates, m_m_rates, e_f_rates, num_bands, do_symm):
     killall("iperf")
     n_users = len(g_rates)
 
