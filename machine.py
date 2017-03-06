@@ -1,10 +1,17 @@
 from cmdlib import killall_str
 from misc import hnum
-from uconf import BN_BITRATE
+from uconf import BN_BITRATE, SUBNET_PREFIX_LEN
 
 NO_MARKERS = "no_markers"
 BUCKETS_MARKERS = "buckets_markers"
 IPTABLES_MARKERS = "iptables_markers"
+
+veth_counter = dict()
+
+
+def reset_gloabals():
+    global veth_counter
+    veth_counter = dict()
 
 
 def clean_up(intfs):
@@ -23,9 +30,6 @@ def clean_up(intfs):
     lines.append("")
 
     return lines
-
-
-veth_counter = dict()
 
 
 def fwchain(source_confs, server_ip, client_intf, client_id, queuelen=1000, marking_type=IPTABLES_MARKERS):
@@ -92,17 +96,16 @@ def fwchain(source_confs, server_ip, client_intf, client_id, queuelen=1000, mark
         if_delay = rtts[i]
         est_period_ms = max(250, if_delay)
 
-        ns_lines.append('ifconfig %s %s up' % (veth_intf, veth_ip))
+        ns_lines.append('ifconfig %s %s/%s up' % (veth_intf, veth_ip, SUBNET_PREFIX_LEN))
         ns_lines.append(set_queuelen(veth_intf, queuelen))
 
         ns_lines.append("# RTT: %sms" % if_delay)
         netem_qdisc_id = 1
         dsmark_qdisc_id = netem_qdisc_id + 1
-        if if_delay > 0:  # [ms] apply a delaying qdisc
-            ns_lines.append(tc_add_netem_qdisc(veth_intf, "root", netem_qdisc_id, BN_BITRATE, if_delay, queuelen))
-        else:
-            if queuelen > 0:  # otherwise it creates a fifo of 1 packet!
-                ns_lines.append("tc qdisc add dev {} {} handle {}: pfifo".format(veth_intf, 'root', netem_qdisc_id))
+        if if_delay <= 0:
+            if_delay = 1
+        ns_lines.append(tc_add_netem_qdisc(veth_intf, "root", netem_qdisc_id, BN_BITRATE, if_delay, queuelen))
+        # ns_lines.append("tc qdisc add dev {} {} handle {}: pfifo".format(veth_intf, 'root', netem_qdisc_id))
 
         ns_lines.append("# DSCP marker")
         if marking_type != NO_MARKERS:
@@ -126,18 +129,25 @@ def fwchain(source_confs, server_ip, client_intf, client_id, queuelen=1000, mark
     return lines
 
 
-def iperf_clients(iperf_confs, server_ip, dur=60):
+def iperf_clients(source_confs, server_ip, duration):
     lines = []
-    num_conns = [c['num_conn'] for c in iperf_confs]
-    ratess = [c['marking_rates'] for c in iperf_confs]
+    num_conns = [c['num_conn'] for c in source_confs]
+    ratess = [c['marking_rates'] for c in source_confs]
     n_users = len(ratess)
     for u in range(n_users):
         num_conn = num_conns[u]
         lines.append(
             ns('ns%s' % (u + 1)) +
-            "iperf -c{} -P{} -t{} -p{} > /tmp/iperf.{}.log &".format(server_ip, num_conn, dur + 5, 5001, u + 1))
+            "iperf -c{} -P{} -t{} -p{} > /tmp/iperf.{}.log &".format(server_ip, num_conn, duration, 5001, u + 1))
     lines.append("wait")
     lines.append("echo DONE!")
+    return lines
+
+
+def pingers(source_confs, server_ip, count=1):
+    lines = ['set -e']
+    for u in range(len(source_confs)):
+        lines.append(ns('ns%s' % (u + 1)) + "ping -qn -c%s %s" % (count, server_ip))
     return lines
 
 
@@ -176,7 +186,7 @@ def ipt_classify_and_accept(est_name, dest_ip, qdisc_id, class_id, rate=-1):
     """
     match_on_rate = ""
     if rate > 0:
-        match_on_rate = "-m rateest --rateest {} --rateest-gt --rateest-bps {} ".format(est_name, rate)
+        match_on_rate = "-m rateest --rateest {} --rateest-gt --rateest-bps {} ".format(est_name, int(rate))
 
     command1 = "iptables -A OUTPUT -d {} {} -j CLASSIFY --set-class {}:{}".format(dest_ip, match_on_rate, qdisc_id,
                                                                                   class_id)
@@ -227,7 +237,7 @@ def gen_server_script(server_ip, intf):
     lines.append("ifconfig {} 0.0.0.0 up".format(veth_intf))
     lines.append('ip netns add %s' % ns_name)
     lines.append('ip link set dev %s netns %s' % (veth_intf, ns_name))
-    lines.append(ns(ns_name) + 'ifconfig %s up %s' % (veth_intf, server_ip))
+    lines.append(ns(ns_name) + 'ifconfig %s up %s/%s' % (veth_intf, server_ip, SUBNET_PREFIX_LEN))
 
     return lines
 

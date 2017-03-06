@@ -27,6 +27,7 @@ sem_data = threading.Semaphore(1)  # semaphore for operations on data
 stop = threading.Event()  # event to stop every thread
 pause = threading.Event()  # event to pause the visualizations
 global t0  # unix timestamp of the reference instant
+global cmd_prefix
 clients_id = []  # list of all couples (ip-port) that identify an user
 DEATH_TOLERANCE = 2 * IPERF_REPORT_INTERVAL  # time with no reports after which a user is considered dead
 T = IPERF_REPORT_INTERVAL * 0.8  # reports in [t-T,t+T] are burned
@@ -337,6 +338,9 @@ def iperf_tcp_thread(data, port, singles):
     report_interval = IPERF_REPORT_INTERVAL
     cmd = "iperf -s -i{} -fk -yC -p{}".format(report_interval, port)
 
+    if cmd_prefix:
+        cmd = "%s %s" % (cmd_prefix, cmd)
+
     tzeros = {}  # first timestamp of each user
 
     for line in iterate_cmd_out(cmd):
@@ -394,6 +398,10 @@ def iperf_udp_thread(data, port, singles):
     print "iperf udp server on port {} started".format(port)
     report_interval = IPERF_REPORT_INTERVAL
     cmd = "iperf -s -i{} -fk -yC -u -p{}".format(report_interval, port)
+
+    if cmd_prefix:
+        cmd = "%s %s" % (cmd_prefix, cmd)
+
     tzeros = {}
     for line in iterate_cmd_out(cmd):
         if stop.is_set():
@@ -464,6 +472,9 @@ Start, parse and save bwm-ng
 def bwm_ng_thread(data, interface):
     print "bwm-ng thread started"
     cmd = "bwm-ng -u bits -T rate -t 1000 -I {} -d 0 -c 0 -o csv".format(interface)
+
+    if cmd_prefix:
+        cmd = "%s %s" % (cmd_prefix, cmd)
 
     for line in iterate_cmd_out(cmd):
         if stop.is_set():
@@ -733,20 +744,28 @@ def keyboard_listener_thread():
 
 
 def check_number_of_users(data, expected_users):
-    if update_alive_flows(data) < expected_users:
+    num = update_alive_flows(data)
+    print "Checking users alive... found %s" % num
+    if num < expected_users:
         stop_server()
 
 
-def run_server(interface, tcp_ports, udp_ports, interactive, duration, do_visualize, expected_users=-1, check_time=1):
+def run_server(interface, tcp_ports, udp_ports, interactive, duration, do_visualize, expected_users=-1,
+               check_time=1, cprefix=None):
     pause.clear()
     stop.clear()
     data = set_data()
     singles = {}  # timestamps of sums executed without an element for each uid
     threads = {}
-    killall("iperf")
+    killall("iperf", arg='-s')
     killall("bwm-ng")
     global t0
     t0 = time.time()
+
+    global cmd_prefix
+
+    if cprefix:
+        cmd_prefix = cprefix
 
     threads["bwm-ng"] = threading.Thread(target=bwm_ng_thread, args=(data["SUM"]["total"], interface))
 
@@ -785,14 +804,14 @@ def run_server(interface, tcp_ports, udp_ports, interactive, duration, do_visual
     finally:
         print "Server terminated"
         timer.cancel()
-        killall("iperf")
+        killall("iperf", arg='-s')
         killall("bwm-ng")
         return data
 
 
 def stop_server():
     stop.set()
-    print 'caller name:', inspect.stack()[1][3]
+    print 'Asked to stop by:', inspect.stack()[1][3]
 
 
 def main(argv):

@@ -7,11 +7,15 @@ import pexpect as pexpect
 FNULL = open(os.devnull, "w")
 
 
-def cmd(command, sudo=False):
+def cmd(command, sudo=False, drop_exception=False, shell=True):
     # TODO: check stderr
     if sudo:
         command = 'sudo ' + command
-    subprocess.call(command, shell=True)
+    try:
+        return subprocess.check_output(command, shell=shell, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        if not drop_exception:
+            raise e
 
 
 def iterate_cmd_out(command):
@@ -73,7 +77,7 @@ def killall_str(process_name, arg=None):
         grep_str = "{}.*{}".format(process_name, arg)
     else:
         grep_str = str(process_name)
-    return "for pid in $(ps -ef | grep \"" + grep_str + "\" | awk '{print $2}'); do sudo kill -9 $pid; done"
+    return "for pid in $(ps -ef | grep \"" + grep_str + "\" | awk '{print $2}'); do kill -9 $pid; done"
 
 
 def killall(process_name, arg=None):
@@ -81,4 +85,4 @@ def killall(process_name, arg=None):
     Effectivelly kill all process with given name
     and optional arguments (used to launch the process)
     """
-    cmd(killall_str(process_name, arg))
+    cmd(killall_str(process_name, arg), drop_exception=True)
